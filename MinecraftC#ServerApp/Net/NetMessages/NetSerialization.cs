@@ -65,7 +65,7 @@ namespace Net.NetMessages
                         break;
 
                     case NetVarTypeEnum.UUID:
-                        ms.Write<UInt128>((UInt128)value!);
+                        ms.Write(((Guid)value!).ToByteArray());
                         break;
                     case NetVarTypeEnum.Long:
                         ms.Write<long>((long)value!);
@@ -133,7 +133,10 @@ namespace Net.NetMessages
                         prop.SetValue(netMsg, (ushort)((value << 8) | (value >> 8)));
                         break;
                     case NetVarTypeEnum.UUID:
-                        prop.SetValue(netMsg, stream.Read<UInt128>());
+                        Span<byte> guidBytes = stackalloc byte[16];
+                        stream.ReadExactly(guidBytes);
+
+                        prop.SetValue(netMsg, new Guid(guidBytes));
                         break;
                     case NetVarTypeEnum.Long:
                         prop.SetValue(netMsg, stream.Read<long>());

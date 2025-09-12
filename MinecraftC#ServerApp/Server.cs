@@ -14,8 +14,12 @@ namespace DaisyCraft
 
         public ServerStatus Status { get; set; } = new(772, true, "DaisyCraft server", 20, 0);
         public Logger Logger { get; init; }
-
-        public Server(Logger logger) => Logger = logger;
+        public Settings Options { get; init; }
+        public Server(Logger logger, Settings options)
+        {
+            Options = options;
+            Logger = logger;
+        }
         
         public void RegisterService(TickableService service) {
             string serviceName = service.GetServiceName();

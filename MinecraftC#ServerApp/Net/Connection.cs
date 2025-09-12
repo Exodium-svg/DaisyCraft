@@ -21,7 +21,7 @@ namespace Net
         public ulong Id { get; set; } // Zero will indicate an unassigned id, meaning we have not completed the login process.
         public long LastPing { get; set; } = 0;
         public string Username { get; set; } = "Unknown user";
-        public UInt128 UUID { get; set; } = UInt128.Zero;
+        public Guid UUID { get; set; } = Guid.Empty;
 
         public object? Data { get; set; } = null;
         Aes? Aes { get; set; } = null;
@@ -55,7 +55,7 @@ namespace Net
 
             Aes.Padding = PaddingMode.None;
             Aes.Mode = CipherMode.CFB;
-            Aes.KeySize = cipherKey.Length * 8;
+            Aes.KeySize = 128;
             Aes.FeedbackSize = 8;
             Aes.Key = cipherKey;
             Aes.IV = (byte[])cipherKey.Clone();

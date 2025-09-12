@@ -1,20 +1,27 @@
 ﻿using DaisyCraft;
 using DaisyCraft.Utils;
+using Net;
 using Scheduling;
 using System.Buffers.Text;
 using System.Diagnostics;
 using System.Reflection;
+using Utils;
 
 internal class Program
 {
     static void Main(string[] args)
     {
         Logger logger = new Logger(new Stream[] { Console.OpenStandardOutput() });
-        Server server = new Server(logger);
 
-        if( File.Exists("server-icon.png"))
+        Settings settings = new Settings();
+        settings.StartAsync("Resource/settings.txt", logger).Wait();
+
+        Server server = new Server(logger, settings);
+
+        const string ICON_PATH = "Resource/server-icon.png";
+        if ( File.Exists(ICON_PATH))
         {
-            byte[] pngData = File.ReadAllBytes("server-icon.png");
+            byte[] pngData = File.ReadAllBytes(ICON_PATH);
 
             server.Status.Icon += Convert.ToBase64String(pngData);
 
@@ -30,7 +37,12 @@ internal class Program
         }
 
         server.RegisterService(new Scheduler());
-        server.RegisterService(new Net.Network("0.0.0.0", 25565, logger, Assembly.GetExecutingAssembly(), bannedIps));
+        server.RegisterService(
+            new Network(
+                settings.GetVar<string>("address", "0.0.0.0"), 
+                settings.GetVar<int>("port", 25565), logger, 
+                Assembly.GetExecutingAssembly(), bannedIps)
+            );
 
 
         const int MILLISECOND = 1000;

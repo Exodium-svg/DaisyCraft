@@ -12,7 +12,7 @@ namespace Net.NetMessages.Serverbound
         public string Username { get; set; } = string.Empty;
 
         [NetVarType(NetVarTypeEnum.UUID, 1)]
-        public UInt128 UUID { get; set; }
+        public Guid UUID { get; set; }
 
         public override void Handle(Connection connection, Server server)
         {

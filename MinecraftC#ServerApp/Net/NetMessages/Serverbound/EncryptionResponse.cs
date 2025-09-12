@@ -2,6 +2,8 @@
 using Net.NetMessages.Clientbound;
 using NetMessages;
 using System.Security.Cryptography;
+using System.Text.Json;
+using Utils;
 
 namespace Net.NetMessages.Serverbound
 {
@@ -36,10 +38,15 @@ namespace Net.NetMessages.Serverbound
             // we will invalidate this, it's kind of bad as we are creating 3rd generation garbage, maybe use a structure? for passing it around my value instead of reference.
             connection.Data = null;
 
+            // Enable encryption.
             connection.SetCipher(AesCipher);
 
-            connection.Send(new KickResponse("test"));
-            // set encryption here?
+            MojangApi.HasJoined(connection.Username, string.Empty, AesCipher, data.Rsa.ExportRSAPublicKey());
+
+
+
+
+            connection.Send(new KickResponse("Hello do we work??"));
 
 
         }
