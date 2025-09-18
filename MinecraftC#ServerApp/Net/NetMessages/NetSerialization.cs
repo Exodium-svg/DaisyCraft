@@ -80,7 +80,7 @@ namespace Net.NetMessages
 
             return ms.ToArray();
         }
-
+        
         // if too slow we can also turn this into code gen.
         public static void Deserialize(INetMessage netMsg, int msgId, Stream stream)
         {

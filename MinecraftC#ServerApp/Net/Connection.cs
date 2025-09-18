@@ -66,16 +66,25 @@ namespace Net
         }
         public void Send<T>(T msg) where T : class
         {
+            using MemoryStream ms = new();
+
             byte[] payload = NetSerialization.Serialize<T>(msg);
-            byte[] sizePrefix = Leb128.CreateVarInt(payload.Length).ToArray();
 
-            byte[] packet = new byte[sizePrefix.Length + payload.Length];
+            Leb128.WriteVarInt(ms, payload.Length);
+            ms.Write(payload);
 
-            sizePrefix.CopyTo(packet, 0);
-            payload.CopyTo(packet, sizePrefix.Length);
 
-            try { GetWriteStream().Write(packet); } 
-            catch(Exception) { } // we ignore exceptions, as this will set the connection as disconnected anyways.
+            try
+            {
+                Stream stream = GetWriteStream();
+                stream.Write(ms.ToArray());
+                stream.Flush();
+
+                if (stream is CryptoStream cipherStream)
+                    cipherStream.FlushFinalBlock();
+            }
+
+            catch (Exception) { } // we ignore exceptions, as this will set the connection as disconnected anyways.
         }
 
     }

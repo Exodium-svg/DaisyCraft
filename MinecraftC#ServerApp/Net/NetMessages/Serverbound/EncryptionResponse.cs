@@ -1,6 +1,8 @@
 ﻿using DaisyCraft;
+using DaisyCraft.Utils;
 using Net.NetMessages.Clientbound;
 using NetMessages;
+using Scheduling;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Utils;
@@ -41,14 +43,27 @@ namespace Net.NetMessages.Serverbound
             // Enable encryption.
             connection.SetCipher(AesCipher);
 
-            MojangApi.HasJoined(connection.Username, string.Empty, AesCipher, data.Rsa.ExportRSAPublicKey());
+
+            // need a type of usercache so we don't keep spamming this api...
+            Task<MojangApiResponse?> responseTask = MojangApi.HasJoined(connection.Username, AesCipher, data.Rsa.ExportSubjectPublicKeyInfo());
+
+            responseTask.Wait();
+
+            MojangApiResponse? response = responseTask.GetAwaiter().GetResult();
+
+            
+
+            if ( null == response )
+            {
+                server.Logger.Warn($"Invalid session request from: {connection.Username} {connection.GetSocket().RemoteEndPoint}");
+                connection.Send(new KickResponse("Invalid session"));
+                server.GetService<Scheduler>().ScheduleDelayed(1000, () => { connection.Close(); return 0; });
+                return;
+            }
 
 
-
-
-            connection.Send(new KickResponse("Hello do we work??"));
-
-
+            // If success WE need to add some kind of session cache with IP + username hash. ( I don't like the idea of their cookies )
+            connection.Send(new KickResponse("TODO: go to compression stage -> configuration state"));
         }
     }
 }

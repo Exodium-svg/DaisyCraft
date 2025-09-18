@@ -30,10 +30,11 @@ internal class Program
 
         IEnumerable<string>? bannedIps = null;
 
-        if (File.Exists("banned-ips.txt"))
+        const string BANNED_IPS_PATH = "Resource/banned-ips.txt";
+        if (File.Exists(BANNED_IPS_PATH))
         {
-            bannedIps = File.ReadAllLines("banned-ips.txt").Where(line => !string.IsNullOrWhiteSpace(line) && !line.StartsWith("#")).Select(line => line.Trim());
-            logger.Info($"Loaded {bannedIps.Count()} banned IPs from banned-ips.txt");
+            bannedIps = File.ReadAllLines(BANNED_IPS_PATH).Where(line => !string.IsNullOrWhiteSpace(line) && !line.StartsWith("#")).Select(line => line.Trim());
+            logger.Info($"Loaded {bannedIps.Count()} banned addresses");
         }
 
         server.RegisterService(new Scheduler());
