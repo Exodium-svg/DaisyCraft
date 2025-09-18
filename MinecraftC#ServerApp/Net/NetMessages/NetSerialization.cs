@@ -43,7 +43,7 @@ namespace Net.NetMessages
                         break;
 
                     case NetVarTypeEnum.Varint:
-                        Leb128.WriteVarInt(ms, Convert.ToInt32(value!));
+                        Leb128.WriteVarInt(ms, (int)value!);
                         break;
 
                     case NetVarTypeEnum.String:

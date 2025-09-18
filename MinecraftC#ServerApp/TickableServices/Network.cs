@@ -7,8 +7,9 @@ using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
 using Net.NetMessages.Clientbound;
+using System.IO.Compression;
 
-namespace Net
+namespace TickableServices
 {
     public class Network : TickableService
     {
@@ -96,7 +97,62 @@ namespace Net
                     connections.Add(new Connection(client));
             }
         }
+        private void HandleNetMessage(Connection connection, Stream stream, int packetId, List<Connection> toRemove)
+        {
+            if (!packetHandlers[connection.State].TryGetValue(packetId, out Type? netType))
+            {
+                logger.Error($"Received unknown packet ID {packetId} in state {connection.State} from {connection.Id}, connection closed.");
 
+                connection.Close();
+                toRemove.Add(connection);
+                return;
+            }
+
+            INetMessage? netMsg = Activator.CreateInstance(netType) as INetMessage;
+
+            if (null == netMsg)
+            {
+                string errMsg = $"Failed to create instance of packet ID {packetId} in state {connection.State} from {connection.Id}, connection closed.";
+                logger.Error(errMsg);
+
+                connection.Send(new KickResponse(errMsg));
+
+                connection.Close();
+                toRemove.Add(connection);
+                return;
+            }
+
+            NetSerialization.Deserialize(netMsg, packetId, stream);
+
+            // don't have server object yet, need to create.
+            netMsg.Handle(connection, server);
+        }
+        private void HandlePacket(Connection connection, Stream stream, List<Connection> toRemove)
+        {
+            //Stream stream = connection.GetReadStream();
+
+            try
+            {
+                //int size = Leb128.ReadVarInt(stream); // packet length, we don't actually need this.
+                int packetId = Leb128.ReadVarInt(stream);
+                
+                HandleNetMessage(connection, stream, packetId, toRemove);
+            }
+            catch (EndOfStreamException)
+            {
+                connection.Close();
+                if (!toRemove.Contains(connection))
+                    toRemove.Add(connection);
+            }
+            catch (Exception ex)
+            {
+                logger.Exception(ex);
+                connection.Close();
+                if (!toRemove.Contains(connection))
+                    toRemove.Add(connection);
+                return;
+            }
+        }
         public override void Tick(long deltaTime)
         {
             lock (connections)
@@ -119,49 +175,27 @@ namespace Net
 
                     Stream stream = connection.GetReadStream();
 
-                    try
+                    int length = Leb128.ReadVarInt(stream);
+
+                    byte[] data = new byte[length];
+                    stream.ReadExactly(data);
+
+                    using MemoryStream ms = new(data);
+
+
+                    if (length <= connection.CompressionThreshold)
                     {
-                        int size = Leb128.ReadVarInt(stream); // packet length, we don't actually need this.
-                        int packetId = Leb128.ReadVarInt(stream);
-                        if (!packetHandlers[connection.State].TryGetValue(packetId, out Type? netType))
-                        {
-                            logger.Error($"Received unknown packet ID {packetId} in state {connection.State} from {connection.Id}, connection closed.");
+                        // is compressed
+                        int compressedLength = Leb128.ReadVarInt(ms); // we ignore this, as we just assume it's right because we are lazy pieces of shit.
 
-                            connection.Close();
-                            toRemove.Add(connection);
-                            continue;
-                        }
+                        using ZLibStream zStream = new ZLibStream(ms, CompressionMode.Decompress);
 
-                        INetMessage? netMsg = Activator.CreateInstance(netType) as INetMessage;
-
-                        if (null == netMsg)
-                        {
-                            string errMsg = $"Failed to create instance of packet ID {packetId} in state {connection.State} from {connection.Id}, connection closed.";
-                            logger.Error(errMsg);
-
-                            connection.Send(new KickResponse(errMsg));
-
-                            connection.Close();
-                            toRemove.Add(connection);
-                            continue;
-                        }
-
-                        NetSerialization.Deserialize(netMsg, packetId, stream);
-
-                        // don't have server object yet, need to create.
-                        netMsg.Handle(connection, server);
+                        int packetId = Leb128.ReadVarInt(zStream);
+                        HandleNetMessage(connection, zStream, packetId, toRemove);
                     }
-                    catch (EndOfStreamException) { 
-                        connection.Close();
-                        if (!toRemove.Contains(connection))
-                            toRemove.Add(connection);
-                    }
-                    catch (Exception ex)
+                    else
                     {
-                        logger.Exception(ex);
-                        connection.Close();
-                        if (!toRemove.Contains(connection))
-                            toRemove.Add(connection);
+                        HandlePacket(connection, ms, toRemove);
                         continue;
                     }
                 }

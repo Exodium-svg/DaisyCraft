@@ -63,7 +63,11 @@ namespace Net.NetMessages.Serverbound
 
 
             // If success WE need to add some kind of session cache with IP + username hash. ( I don't like the idea of their cookies )
-            connection.Send(new KickResponse("TODO: go to compression stage -> configuration state"));
+            //connection.Send(new KickResponse("TODO: go to compression stage -> configuration state"));
+            int threshHold = server.Options.GetVar<int>("net.compression.thresh_hold", 127);
+
+            connection.Send(new SetCompression(threshHold));
+            connection.CompressionThreshold = threshHold;
         }
     }
 }

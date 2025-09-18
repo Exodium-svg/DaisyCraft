@@ -1,5 +1,6 @@
 ﻿using Net;
 using Net.NetMessages;
+using System.IO.Compression;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 
@@ -24,6 +25,7 @@ namespace Net
         public Guid UUID { get; set; } = Guid.Empty;
 
         public object? Data { get; set; } = null;
+        public int CompressionThreshold { get; set; } = -1; // 0 means no compression.
         Aes? Aes { get; set; } = null;
 
         Stream readStream;
@@ -66,25 +68,58 @@ namespace Net
         }
         public void Send<T>(T msg) where T : class
         {
-            using MemoryStream ms = new();
+            // Step 1: Serialize payload (PacketID + Data)
+            byte[] payload = NetSerialization.Serialize(msg);
 
-            byte[] payload = NetSerialization.Serialize<T>(msg);
+            byte[] finalPacket;
 
-            Leb128.WriteVarInt(ms, payload.Length);
-            ms.Write(payload);
+            if (CompressionThreshold == -1)
+            {
+                // Compression disabled
+                using MemoryStream packet = new();
+                Leb128.WriteVarInt(packet, payload.Length);
+                packet.Write(payload);
+                finalPacket = packet.ToArray();
+            }
 
+            else if (payload.Length >= CompressionThreshold)
+            {
+                // Compressed
+                using MemoryStream compressed = new();
+                using (ZLibStream zStream = new(compressed, CompressionMode.Compress, true))
+                {
+                    zStream.Write(payload, 0, payload.Length);
+                    zStream.Flush();
+                }
+
+                using MemoryStream packet = new();
+                Leb128.WriteVarInt(packet, (int)compressed.Length + Leb128.SizeOfVarInt(payload.Length));
+                Leb128.WriteVarInt(packet, payload.Length); // Data Length (uncompressed size)
+                packet.Write(compressed.ToArray());
+
+                finalPacket = packet.ToArray();
+            }
+            else
+            {
+                // --- Uncompressed case ---
+                using MemoryStream packet = new();
+                Leb128.WriteVarInt(packet, payload.Length + Leb128.SizeOfVarInt(0));
+                Leb128.WriteVarInt(packet, 0); // Data Length = 0 (means uncompressed)
+                packet.Write(payload);
+
+                finalPacket = packet.ToArray();
+            }
 
             try
             {
                 Stream stream = GetWriteStream();
-                stream.Write(ms.ToArray());
+                stream.Write(finalPacket, 0, finalPacket.Length);
                 stream.Flush();
 
                 if (stream is CryptoStream cipherStream)
                     cipherStream.FlushFinalBlock();
             }
-
-            catch (Exception) { } // we ignore exceptions, as this will set the connection as disconnected anyways.
+            catch (Exception) { }
         }
 
     }

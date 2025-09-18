@@ -1,4 +1,6 @@
-﻿namespace DaisyCraft
+﻿using DaisyCraft;
+
+namespace TickableServices
 {
     public class TickableService
     {

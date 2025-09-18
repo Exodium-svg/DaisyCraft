@@ -2,6 +2,17 @@
 {
     public static class Leb128
     {
+        public static int SizeOfVarInt(int value)
+        {
+            int size = 0;
+            do
+            {
+                value >>= 7;
+                size++;
+            } while (value != 0);
+            return size;
+        }
+
         public static int ReadVarInt(Stream stream)
         {
             int numRead = 0;
