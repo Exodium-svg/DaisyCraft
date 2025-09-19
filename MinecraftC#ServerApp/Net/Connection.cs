@@ -1,4 +1,5 @@
 ﻿using Net;
+using Net.Cipher;
 using Net.NetMessages;
 using System.IO.Compression;
 using System.Net.Sockets;
@@ -12,6 +13,7 @@ namespace Net
         Unknown,
         Status,
         Login,
+        Configuration,
         // Yes these 2 fields are meant to be the same, Love mc protocol.
         Play,
         Transfer = 3,
@@ -27,17 +29,19 @@ namespace Net
 
         public object? Data { get; set; } = null;
         public int CompressionThreshold { get; set; } = -1; // 0 means no compression.
-        Aes? Aes { get; set; } = null;
+        //Aes? Aes { get; set; } = null;
 
-        Stream readStream;
-        Stream writeStream;
+        //ICryptoTransform writeTransform;
+        //Stream readStream;
+        //Stream writeStream;
+        AesCfbBlockCipher? Cipher { get; set; }
+        public NetworkStream Stream { get; init; }
         public Connection(TcpClient client)
         {
             this.client = client;
             client.NoDelay = true;
             this.Id = 0;
-            this.readStream = client.GetStream();
-            this.writeStream = readStream;
+            Stream = client.GetStream();
             State = GameState.Unknown;
         }
         public bool IsConnected() => client.Connected;
@@ -45,29 +49,16 @@ namespace Net
         {
             if (client.Connected)
                 client.Close();
-
-            readStream.Dispose();
-            writeStream.Dispose();
         }
 
         public bool DataAvailable() => client.Client.Available > 0;
-        public Stream GetReadStream() => readStream; // cipher stream / compress stream later :moon: pls end me
-        public Stream GetWriteStream() => writeStream;
         public Socket GetSocket() => client.Client;
         public void SetCipher(byte[] cipherKey)
         {
-            Aes = Aes.Create();
-
-            Aes.Padding = PaddingMode.None;
-            Aes.Mode = CipherMode.CFB;
-            Aes.KeySize = 128;
-            Aes.FeedbackSize = 8;
-            Aes.Key = cipherKey;
-            Aes.IV = (byte[])cipherKey.Clone();
-
-            Stream stream = client.GetStream();
-            readStream = new CryptoStream(stream, Aes.CreateDecryptor(), CryptoStreamMode.Read);
-            writeStream = new CryptoStream(stream, Aes.CreateEncryptor(), CryptoStreamMode.Write);
+            Cipher = new AesCfbBlockCipher(cipherKey);
+            //Stream stream = client.GetStream();
+            //readStream = new CryptoStream(stream, Aes.CreateDecryptor(), CryptoStreamMode.Read);
+            //writeStream = new CryptoStream(stream, Aes.CreateEncryptor(), CryptoStreamMode.Write);
         }
 
         private void WriteUncompressed(Stream stream, byte[] payload)
@@ -102,7 +93,6 @@ namespace Net
                 //    cipherStream.FlushFinalBlock();
             }
         }
-
         public void Send<T>(T msg) where T : class
         {
             // Step 1: Serialize payload (PacketID + Data)
@@ -115,22 +105,15 @@ namespace Net
             else
                 WriteCompressed(packet, payload);
 
-            byte[] finalPacket = packet.ToArray();
+            Span<byte> finalPacket = packet.ToArray();
+
+            if (null != Cipher)
+                finalPacket = Cipher.Encrypt(finalPacket);
 
             try
             {
-                Stream stream = GetWriteStream();
-                stream.Write(finalPacket, 0, finalPacket.Length);
-
-                //stream.Flush();
-
-                if (stream is CryptoStream cipherStream)
-                {
-                    cipherStream.Flush();
-                }
-                    
-                else
-                    stream.Flush();
+                
+                Stream.Write(finalPacket);
             }
             catch (SocketException) { }
             catch (Exception ex) { Console.WriteLine($"Something went wrong in our sending: {ex}"); }

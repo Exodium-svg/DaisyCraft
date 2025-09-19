@@ -17,7 +17,7 @@ namespace Net.NetMessages.Serverbound
         [NetVarType(NetVarTypeEnum.ByteArray, 1)]
         public byte[] Challenge { get; set; }
 
-        public override void Handle(Connection connection, Server server)
+        public override async void Handle(Connection connection, Server server)
         {
             EncryptionRequestData? data = connection.Data as EncryptionRequestData;
 
@@ -45,13 +45,8 @@ namespace Net.NetMessages.Serverbound
 
 
             // need a type of usercache so we don't keep spamming this api...
-            Task<MojangApiResponse?> responseTask = MojangApi.HasJoined(connection.Username, AesCipher, data.Rsa.ExportSubjectPublicKeyInfo());
+            MojangApiResponse? response = await MojangApi.HasJoined(connection.Username, AesCipher, data.Rsa.ExportSubjectPublicKeyInfo());
 
-            responseTask.Wait();
-
-            MojangApiResponse? response = responseTask.GetAwaiter().GetResult();
-
-            
 
             if ( null == response )
             {
@@ -61,17 +56,16 @@ namespace Net.NetMessages.Serverbound
                 return;
             }
 
-
-            // If success WE need to add some kind of session cache with IP + username hash. ( I don't like the idea of their cookies )
-            
             int threshHold = server.Options.GetVar<int>("net.compression.thresh_hold", 127);
 
             connection.Send(new SetCompression(threshHold));
             connection.CompressionThreshold = threshHold;
 
 
-            connection.Send(new KickResponse("Fix the cipher flushing issues, We need a certain amount of data before we can flush"));
-            //connection.Send(new KickResponse("TODO: go to compression stage -> configuration state asflkjfasdlkjafsdjklasfdjklafsdjklasdfajklsfdjklkjlasdfkjlafsdjlkjkl"));
+            //connection.Send(new KickResponse("It works now"));
+            connection.Send(new LoginSuccess(connection.UUID, connection.Username));
+
+            //connection.State = GameState.Configuration;
             //connection.Send(new KickResponse("TODO: go to compression stage -> configuration state asflkjfasdlkjafsdjklasfdjklafsdjklasdfajklsfdjklkjlasdfkjlafsdjlkjkl"));
 
         }

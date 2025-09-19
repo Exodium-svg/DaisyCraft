@@ -3,6 +3,7 @@ using TickableServices;
 using Net;
 using System.Collections.Concurrent;
 using Utils;
+using Services;
 
 namespace DaisyCraft
 {
@@ -16,10 +17,12 @@ namespace DaisyCraft
         public ServerStatus Status { get; set; } = new(772, true, "DaisyCraft server", 20, 0);
         public Logger Logger { get; init; }
         public Settings Options { get; init; }
+        public SessionService SessionService { get; init; }
         public Server(Logger logger, Settings options)
         {
             Options = options;
             Logger = logger;
+            SessionService = new("user-cache");
         }
         
         public void RegisterService(TickableService service) {

@@ -176,7 +176,7 @@ namespace TickableServices
                         continue;
                     //var message = connection.ReadMessage();
 
-                    Stream stream = connection.GetReadStream();
+                    Stream stream = connection.Stream;
 
                     int length = Leb128.ReadVarInt(stream);
 
