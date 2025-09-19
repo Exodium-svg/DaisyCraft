@@ -3,6 +3,7 @@ using Net.NetMessages;
 using System.IO.Compression;
 using System.Net.Sockets;
 using System.Security.Cryptography;
+using Utils;
 
 namespace Net
 {
@@ -33,6 +34,7 @@ namespace Net
         public Connection(TcpClient client)
         {
             this.client = client;
+            client.NoDelay = true;
             this.Id = 0;
             this.readStream = client.GetStream();
             this.writeStream = readStream;
@@ -45,6 +47,7 @@ namespace Net
                 client.Close();
 
             readStream.Dispose();
+            writeStream.Dispose();
         }
 
         public bool DataAvailable() => client.Client.Available > 0;
@@ -66,60 +69,71 @@ namespace Net
             readStream = new CryptoStream(stream, Aes.CreateDecryptor(), CryptoStreamMode.Read);
             writeStream = new CryptoStream(stream, Aes.CreateEncryptor(), CryptoStreamMode.Write);
         }
+
+        private void WriteUncompressed(Stream stream, byte[] payload)
+        {
+            Leb128.WriteVarInt(stream, payload.Length);
+            stream.Write(payload);
+
+            //if (stream is CryptoStream cipherStream)
+            //    cipherStream.FlushFinalBlock();
+        }
+        private void WriteCompressed(Stream stream, byte[] payload)
+        {
+            // size | size uncompressed ( 0 IF below thresh hold )
+            int uncompressedSize = payload.Length;
+            if (payload.Length >= CompressionThreshold)
+            {
+
+                byte[] compressedPayload = ZlibHelper.Compress(payload, CompressionLevel.Fastest);
+
+
+                Leb128.WriteVarInt(stream, compressedPayload.Length + Leb128.SizeOfVarInt(uncompressedSize));
+                Leb128.WriteVarInt(stream, uncompressedSize);
+                stream.Write(compressedPayload);
+            }
+            else
+            { 
+                Leb128.WriteVarInt(stream, uncompressedSize + Leb128.SizeOfVarInt(0));
+                Leb128.WriteVarInt(stream, 0);
+                stream.Write(payload);
+
+                //if (stream is CryptoStream cipherStream)
+                //    cipherStream.FlushFinalBlock();
+            }
+        }
+
         public void Send<T>(T msg) where T : class
         {
             // Step 1: Serialize payload (PacketID + Data)
             byte[] payload = NetSerialization.Serialize(msg);
 
-            byte[] finalPacket;
-
+            using MemoryStream packet = new();
             if (CompressionThreshold == -1)
-            {
-                // Compression disabled
-                using MemoryStream packet = new();
-                Leb128.WriteVarInt(packet, payload.Length);
-                packet.Write(payload);
-                finalPacket = packet.ToArray();
-            }
+                WriteUncompressed(packet, payload);
 
-            else if (payload.Length >= CompressionThreshold)
-            {
-                // Compressed
-                using MemoryStream compressed = new();
-                using (ZLibStream zStream = new(compressed, CompressionMode.Compress, true))
-                {
-                    zStream.Write(payload, 0, payload.Length);
-                    zStream.Flush();
-                }
-
-                using MemoryStream packet = new();
-                Leb128.WriteVarInt(packet, (int)compressed.Length + Leb128.SizeOfVarInt(payload.Length));
-                Leb128.WriteVarInt(packet, payload.Length); // Data Length (uncompressed size)
-                packet.Write(compressed.ToArray());
-
-                finalPacket = packet.ToArray();
-            }
             else
-            {
-                // --- Uncompressed case ---
-                using MemoryStream packet = new();
-                Leb128.WriteVarInt(packet, payload.Length + Leb128.SizeOfVarInt(0));
-                Leb128.WriteVarInt(packet, 0); // Data Length = 0 (means uncompressed)
-                packet.Write(payload);
+                WriteCompressed(packet, payload);
 
-                finalPacket = packet.ToArray();
-            }
+            byte[] finalPacket = packet.ToArray();
 
             try
             {
                 Stream stream = GetWriteStream();
                 stream.Write(finalPacket, 0, finalPacket.Length);
-                stream.Flush();
+
+                //stream.Flush();
 
                 if (stream is CryptoStream cipherStream)
-                    cipherStream.FlushFinalBlock();
+                {
+                    cipherStream.Flush();
+                }
+                    
+                else
+                    stream.Flush();
             }
-            catch (Exception) { }
+            catch (SocketException) { }
+            catch (Exception ex) { Console.WriteLine($"Something went wrong in our sending: {ex}"); }
         }
 
     }

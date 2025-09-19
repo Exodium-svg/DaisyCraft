@@ -153,6 +153,9 @@ namespace TickableServices
                 return;
             }
         }
+
+
+        // we should be receiving async so we can be more scalable and then handle all the packets on a tick as they have already been received.
         public override void Tick(long deltaTime)
         {
             lock (connections)
