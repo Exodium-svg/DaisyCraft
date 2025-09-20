@@ -51,7 +51,6 @@ namespace TickableServices
         Logger logger;
 
         Socket listener;
-        Server server;
         ArrayPool<byte> bufferPool = ArrayPool<byte>.Shared;
 
         ConcurrentQueue<NetBuffer> readBuffer = new ConcurrentQueue<NetBuffer>();
@@ -274,7 +273,7 @@ namespace TickableServices
 
         public override string GetServiceName() => nameof(Network);
         
-        private void HandlePacket(int packetId, Stream stream, Player player)
+        private Task HandlePacket(int packetId, Stream stream, Player player)
         {
             Type packetType = packetHandlers[player.State][packetId];
 
@@ -288,13 +287,14 @@ namespace TickableServices
                 logger.Error(errMsg);
 
                 _ = player.Kick(errMsg, server.GetService<Scheduler>());
+                return Task.CompletedTask;
             }
 
-            NetSerialization.Deserialize(netMessage!, packetId, stream);
+            NetSerialization.Deserialize(netMessage, packetId, stream);
 
-            netMessage.Handle(null, server);
+            return netMessage.Handle(player, server);
         }
-        private void ReadCompressed(NetBuffer buffer)
+        private Task ReadCompressed(NetBuffer buffer)
         {
             Player player = buffer.Owner;
 
@@ -307,17 +307,17 @@ namespace TickableServices
 
             int id = Leb128.ReadVarInt(stream);
 
-            HandlePacket(id, stream, player);
+            return HandlePacket(id, stream, player);
         }
 
-        private void ReadUncompressed(NetBuffer buffer)
+        private Task ReadUncompressed(NetBuffer buffer)
         {
             Player player = buffer.Owner; 
             using MemoryStream stream = buffer.GetStream();
 
             int packetId = Leb128.ReadVarInt(stream);
 
-            HandlePacket(packetId, stream, player);
+            return HandlePacket(packetId, stream, player);
         }
         public override void Tick(long deltaTime)
         {
@@ -325,17 +325,19 @@ namespace TickableServices
 
             Interlocked.Exchange(ref receiveBuffer, readBuffer);
 
+            List<Task> tasksToComplete = new(readBuffer.Count);
             while(!readBuffer.IsEmpty)
             {
                 if (!readBuffer.TryDequeue(out NetBuffer? buffer))
                     continue;
 
                 if (buffer.Compressed)
-                    ReadCompressed(buffer);
+                    tasksToComplete.Add(ReadCompressed(buffer));
                 else
-                    ReadUncompressed(buffer);
+                    tasksToComplete.Add(ReadUncompressed(buffer));
             }
 
+            Task.WhenAll(tasksToComplete).Wait();
         }
 
         public override void Start(Server server)
