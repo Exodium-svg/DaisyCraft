@@ -137,6 +137,10 @@ namespace TickableServices
 
                 Player player = new Player(remoteSocket);
 
+
+                player.Connection.ReceiveTimeout = server.Options.GetVar<int>("net.timeout", 1000);
+                player.Connection.SendTimeout = server.Options.GetVar<int>("net.timeout", 1000);
+
                 lock (players)
                     players.Add(player);
 
@@ -265,7 +269,13 @@ namespace TickableServices
                 deciphered.CopyTo(args.Buffer, 0);
             }
 
-            ParseData(player, buffer, eventHolder, args);
+            try
+            {
+                ParseData(player, buffer, eventHolder, args);
+            }
+            catch (SocketException) { }
+            catch (Exception e) { server.Logger.Exception(e); player.Connection.Close(); }
+            
 
             if (player.Connected ) // we might disconnect the client during the parsing phase.
                 player.Connection.ReceiveAsync(args);
@@ -273,7 +283,7 @@ namespace TickableServices
 
         public override string GetServiceName() => nameof(Network);
         
-        private Task HandlePacket(int packetId, Stream stream, Player player)
+        private Task HandlePacket(int packetId, Stream stream, Player player, NetBuffer buffer)
         {
             Type packetType = packetHandlers[player.State][packetId];
 
@@ -291,6 +301,7 @@ namespace TickableServices
             }
 
             NetSerialization.Deserialize(netMessage, packetId, stream);
+            buffer.Dispose();
 
             return netMessage.Handle(player, server);
         }
@@ -307,7 +318,7 @@ namespace TickableServices
 
             int id = Leb128.ReadVarInt(stream);
 
-            return HandlePacket(id, stream, player);
+            return HandlePacket(id, stream, player, buffer);
         }
 
         private Task ReadUncompressed(NetBuffer buffer)
@@ -317,7 +328,7 @@ namespace TickableServices
 
             int packetId = Leb128.ReadVarInt(stream);
 
-            return HandlePacket(packetId, stream, player);
+            return HandlePacket(packetId, stream, player, buffer);
         }
         public override void Tick(long deltaTime)
         {
@@ -326,6 +337,7 @@ namespace TickableServices
             Interlocked.Exchange(ref receiveBuffer, readBuffer);
 
             List<Task> tasksToComplete = new(readBuffer.Count);
+
             while(!readBuffer.IsEmpty)
             {
                 if (!readBuffer.TryDequeue(out NetBuffer? buffer))
@@ -336,6 +348,23 @@ namespace TickableServices
                 else
                     tasksToComplete.Add(ReadUncompressed(buffer));
             }
+
+            tasksToComplete.Add(Task.Factory.StartNew(() =>
+            {
+                List<Player> playersToRemove = new();
+
+                lock (players)
+                {
+                    foreach (Player player in players)
+                    {
+                        if (!player.Connected)
+                            playersToRemove.Add(player);
+                    }
+
+                    foreach (Player player in playersToRemove)
+                        players.Remove(player);
+                }
+            }));
 
             Task.WhenAll(tasksToComplete).Wait();
         }

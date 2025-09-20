@@ -14,6 +14,7 @@ namespace Utils
             return output.ToArray();
         }
 
+        // this method is shit I know...
         public static byte[] Decompress(byte[] data)
         {
             using MemoryStream input = new MemoryStream(data);
