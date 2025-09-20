@@ -1,5 +1,6 @@
 ﻿using DaisyCraft;
 using DaisyCraft.Utils;
+using Net.NetMessages.Clientbound.Login;
 using Net.NetMessages.Clientbound;
 using NetMessages;
 using Scheduling;
@@ -17,14 +18,14 @@ namespace Net.NetMessages.Serverbound
         [NetVarType(NetVarTypeEnum.ByteArray, 1)]
         public byte[] Challenge { get; set; }
 
-        public override async void Handle(Connection connection, Server server)
+        public override async Task Handle(Player player, Server server)
         {
-            EncryptionRequestData? data = connection.Data as EncryptionRequestData;
+            EncryptionRequestData? data = player.Data as EncryptionRequestData;
 
             // some state is invalid? did we try to do a thing that isn't allowed?
             if (null == data)
             {
-                connection.Close();
+                player.Connection.Close();
                 return;
             }
 
@@ -33,37 +34,41 @@ namespace Net.NetMessages.Serverbound
 
             if ( !data.Token.SequenceEqual(Challenge) )
             {
-                connection.Close(); // we failed to verify the token, close the connection.
+                player.Connection.Close(); // we failed to verify the token, close the connection.
                 return;
             }
 
             // we will invalidate this, it's kind of bad as we are creating 3rd generation garbage, maybe use a structure? for passing it around my value instead of reference.
-            connection.Data = null;
+            player.Data = null;
 
             // Enable encryption.
-            connection.SetCipher(AesCipher);
+            player.SetCipher(AesCipher);
 
 
             // need a type of usercache so we don't keep spamming this api...
-            MojangApiResponse? response = await MojangApi.HasJoined(connection.Username, AesCipher, data.Rsa.ExportSubjectPublicKeyInfo());
+            Task<MojangApiResponse?> task = MojangApi.HasJoined(player.Username, AesCipher, data.Rsa.ExportSubjectPublicKeyInfo());
 
+            task.Wait();
+
+            MojangApiResponse? response = task.Result;
 
             if ( null == response )
             {
-                server.Logger.Warn($"Invalid session request from: {connection.Username} {connection.GetSocket().RemoteEndPoint}");
-                connection.Send(new KickResponse("Invalid session"));
-                server.GetService<Scheduler>().ScheduleDelayed(1000, () => { connection.Close(); return 0; });
+                server.Logger.Warn($"Invalid session request from: {player.Username} {player.Connection.RemoteEndPoint}");
+                await player.Kick("Invalid session", server.GetService<Scheduler>());
+                server.GetService<Scheduler>().ScheduleDelayed(1000, () => { player.Connection.Close(); return 0; });
                 return;
             }
 
-            int threshHold = server.Options.GetVar<int>("net.compression.thresh_hold", 127);
+            int threshold = server.Options.GetVar<int>("net.compression.threshold", 127);
 
-            connection.Send(new SetCompression(threshHold));
-            connection.CompressionThreshold = threshHold;
+            await player.SendAsync(new SetCompression(threshold));
+
+            player.SetCompression(threshold);
 
 
             //connection.Send(new KickResponse("It works now"));
-            connection.Send(new LoginSuccess(connection.UUID, connection.Username));
+            await player.SendAsync(new LoginSuccess(player.Uuid, player.Username));
 
             //connection.State = GameState.Configuration;
             //connection.Send(new KickResponse("TODO: go to compression stage -> configuration state asflkjfasdlkjafsdjklasfdjklafsdjklasdfajklsfdjklkjlasdfkjlafsdjlkjkl"));

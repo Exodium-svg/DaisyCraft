@@ -1,5 +1,5 @@
 ﻿using DaisyCraft;
-using Net.NetMessages.Clientbound;
+using Net.NetMessages.Clientbound.Login;
 using NetMessages;
 using System.Security.Cryptography;
 
@@ -14,14 +14,11 @@ namespace Net.NetMessages.Serverbound
         [NetVarType(NetVarTypeEnum.UUID, 1)]
         public Guid UUID { get; set; }
 
-        public override void Handle(Connection connection, Server server)
+        public override async Task Handle(Player player, Server server)
         {
-            base.Handle(connection, server);
+            player.Username = Username;
+            player.Uuid = UUID;
 
-            connection.Username = Username;
-            connection.UUID = UUID;
-
-            //connection.Send(new KickResponse(Username));
             RSA rsa = RSA.Create(1024);
             EncryptionRequestData requestData = new EncryptionRequestData
             {
@@ -29,9 +26,9 @@ namespace Net.NetMessages.Serverbound
                 Token = RandomNumberGenerator.GetBytes(16)
             };
 
-            connection.Data = requestData;
+            player.Data = requestData;
 
-            connection.Send(new EncryptionRequest(string.Empty, rsa.ExportSubjectPublicKeyInfo(), requestData.Token, true));
+            await player.SendAsync(new EncryptionRequest(string.Empty, rsa.ExportSubjectPublicKeyInfo(), requestData.Token, true));
         }
     }
 }

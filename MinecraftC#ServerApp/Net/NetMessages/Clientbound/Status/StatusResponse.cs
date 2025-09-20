@@ -1,4 +1,7 @@
-﻿namespace Net.NetMessages.Clientbound
+﻿using Net;
+using Net.NetMessages;
+
+namespace Net.NetMessages.Clientbound.Status
 {
     [NetMetaTag(GameState.Status, 0x00)]
     public class StatusResponse

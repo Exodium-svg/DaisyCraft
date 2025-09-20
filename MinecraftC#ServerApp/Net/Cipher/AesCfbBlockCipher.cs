@@ -32,7 +32,7 @@ namespace Net.Cipher
             this.transform = aes.CreateEncryptor();
         }
 
-        public Span<byte> Encrypt(ReadOnlySpan<byte> buffer)
+        public byte[] Encrypt(ReadOnlySpan<byte> buffer)
         {
             var output = new byte[buffer.Length];
             for (int i = 0; i < output.Length; i++)

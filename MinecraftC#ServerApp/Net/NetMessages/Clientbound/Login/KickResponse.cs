@@ -1,5 +1,7 @@
-﻿
-namespace Net.NetMessages.Clientbound
+﻿using Net;
+using Net.NetMessages;
+
+namespace Net.NetMessages.Clientbound.Login
 {
     [NetMetaTag(GameState.Login, 0x00)]
     public class KickResponse

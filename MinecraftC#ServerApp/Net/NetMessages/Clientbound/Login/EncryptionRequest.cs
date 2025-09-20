@@ -1,6 +1,8 @@
-﻿using System.Security.Cryptography;
+﻿using Net;
+using Net.NetMessages;
+using System.Security.Cryptography;
 
-namespace Net.NetMessages.Clientbound
+namespace Net.NetMessages.Clientbound.Login
 {
     class EncryptionRequestData
     {

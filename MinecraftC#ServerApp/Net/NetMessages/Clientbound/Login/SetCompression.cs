@@ -1,4 +1,7 @@
-﻿namespace Net.NetMessages.Clientbound
+﻿using Net;
+using Net.NetMessages;
+
+namespace Net.NetMessages.Clientbound.Login
 {
     [NetMetaTag(GameState.Login, 0x03)]
     public class SetCompression

@@ -1,4 +1,6 @@
-﻿namespace Net
+﻿using System.IO;
+
+namespace Net
 {
     public static class Leb128
     {
@@ -30,6 +32,28 @@
                 if (numRead > 5)
                     throw new InvalidDataException("VarInt is too big");
             } while ((read & 0b10000000) != 0);
+            return result;
+        }
+
+        public static int ReadVarInt(ReadOnlySpan<byte> bytes, out int readBytes)
+        {
+            int numRead = 0;
+            int result = 0;
+            byte read;
+            do
+            {
+                int readByte = bytes[numRead];
+                if (readByte == -1)
+                    throw new EndOfStreamException("Stream ended while attempting to read VarInt.");
+                read = (byte)readByte;
+                int value = (read & 0b01111111);
+                result |= (value << (7 * numRead));
+                numRead++;
+                if (numRead > 5)
+                    throw new InvalidDataException("VarInt is too big");
+            } while ((read & 0b10000000) != 0);
+
+            readBytes = numRead;
             return result;
         }
 

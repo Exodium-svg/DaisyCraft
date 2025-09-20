@@ -1,40 +1,73 @@
 ﻿using DaisyCraft;
-using Net;
 using DaisyCraft.Utils;
+using Net;
 using Net.NetMessages;
+using Net.NetMessages.Packets;
 using NetMessages;
+using Scheduling;
+using System;
+using System.Buffers;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
-using Net.NetMessages.Clientbound;
-using System.IO.Compression;
+using System.Text.Json.Serialization;
+using Utils;
 
 namespace TickableServices
 {
+    public enum NetPhase
+    {
+        Header,
+        Payload,
+    }
+    public class NetEventHolder
+    {
+        public NetBuffer Buffer { get; set; }
+        public Player Player { get; init; }
+        public int Position { get; set; } = 0;
+        public int MsgSize { get; set; } = 0;
+        public NetPhase Phase { get; set; } = NetPhase.Header;
+
+        public NetEventHolder(NetBuffer netBuffer, Player player)
+        {
+            Buffer = netBuffer;
+            Player = player;
+        }
+    }
     public class Network : TickableService
     {
-        readonly string address;
-        readonly int port;
+        const int MAX_PACKET_SIZE = 200000;
 
-        readonly Logger logger;
-        TcpListener listener;
-        List<Connection> connections = new();
-        List<IPAddress> bannedIps = new();
+        List<Player> players = new List<Player>();
 
         bool isRunning = true;
 
-        Dictionary<GameState, Dictionary<int, Type>> packetHandlers = new();
-        //readonly Action<Connection, Span<byte>> onMessage; // instead of this we should just pull the packet types out of the assembly and use reflection to call the right handler.
+        ConcurrentDictionary<GameState, Dictionary<int, Type>> packetHandlers = new();
+
+        public string Address { get; init; }
+        public int Port { get; init; }
+        public List<IPAddress> BannedAddressList { get; init; } = new();
+        Logger logger;
+
+        Socket listener;
+        Server server;
+        ArrayPool<byte> bufferPool = ArrayPool<byte>.Shared;
+
+        ConcurrentQueue<NetBuffer> readBuffer = new ConcurrentQueue<NetBuffer>();
+        ConcurrentQueue<NetBuffer> receiveBuffer = new ConcurrentQueue<NetBuffer>();
+
         public Network(string address, int port, Logger logger, Assembly packetAssembly, IEnumerable<string>? bannedIps = null)
         {
-            this.address = address;
-            this.port = port;
+            this.server = server;
+            Address = address;
+            Port = port;
             this.logger = logger;
 
-            foreach(string bannedAddress in bannedIps ?? Array.Empty<string>())
+            foreach (string bannedAddress in bannedIps ?? Array.Empty<string>())
             {
                 if (IPAddress.TryParse(address, out var ip))
-                    this.bannedIps.Add(ip);
+                    this.BannedAddressList.Add(ip);
                 else
                     logger.Warn($"Failed to parse banned IP address: {address}");
             }
@@ -43,7 +76,7 @@ namespace TickableServices
             IEnumerable<Type> netMsgTypes = packetAssembly.GetTypes().Where((t) => t.IsClass == true && t.GetCustomAttribute<NetMetaTag>() != null && typeof(INetMessage).IsAssignableFrom(t));
 
 
-            if(netMsgTypes.Count() == 0)
+            if (netMsgTypes.Count() == 0)
             {
                 logger.Error("No packet types found in the provided assembly. Network initialization failed.");
                 throw new InvalidOperationException("No packet types found in the provided assembly.");
@@ -54,7 +87,7 @@ namespace TickableServices
                 // checked above we know it works
                 var tag = netMsgType.GetCustomAttribute<NetMetaTag>()!;
 
-                if(!packetHandlers.ContainsKey(tag.State))
+                if (!packetHandlers.ContainsKey(tag.State))
                     packetHandlers[tag.State] = new Dictionary<int, Type>();
 
                 if (!packetHandlers[tag.State].TryAdd(tag.Id, netMsgType))
@@ -64,156 +97,251 @@ namespace TickableServices
                 }
             }
 
-            listener = new TcpListener(IPAddress.Parse(address), port);
-            
-            try { listener.Start(); } // still throw here.
-            catch(Exception ex) { logger.Exception(ex); throw; }
+            listener = new Socket(SocketType.Stream, ProtocolType.Tcp);
+
+            try
+            {
+                listener.Bind(new IPEndPoint(IPAddress.Parse(address), port));
+            }
+            catch (Exception e)
+            {
+                logger.Exception(e);
+                throw;
+            }
+
+            listener.Listen();
         }
 
         public async void Listen()
         {
-            logger.Info($"Networking listening on: {address}:{port}");
-            while (isRunning)
+            logger.Info($"Networking listening on: {Address}:{Port}");
+
+            while(isRunning)
             {
-                TcpClient client = await listener.AcceptTcpClientAsync();
+                Socket remoteSocket = await listener.AcceptAsync();
 
-                IPEndPoint? endPoint = client.Client.RemoteEndPoint as IPEndPoint;
+                var remoteIP = ((IPEndPoint)remoteSocket.RemoteEndPoint!).Address;
 
-                if (null == endPoint || !client.Connected)
+                if (BannedAddressList.Contains(remoteIP))
                 {
-                    client.Close();
+                    remoteSocket.Close();
                     continue;
                 }
 
-                if(bannedIps.Where((address) => address == endPoint.Address).Count() > 0)
+                else if (!remoteSocket.Connected)
                 {
-                    logger.Warn($"Rejected connection from banned IP: {endPoint.Address}");
-                    client.Close();
+                    remoteSocket.Close();
                     continue;
                 }
+                    
 
+
+                Player player = new Player(remoteSocket);
+
+                lock (players)
+                    players.Add(player);
+
+                SocketAsyncEventArgs socketAsyncEventArgs = new SocketAsyncEventArgs();
+                socketAsyncEventArgs.UserToken = new NetEventHolder(new NetBuffer(player, bufferPool), player);
+                socketAsyncEventArgs.SetBuffer(new byte[1024]);
+                socketAsyncEventArgs.Completed += OnReceive;
+
+
+                remoteSocket.ReceiveAsync(socketAsyncEventArgs);
+            }
+        }
+        private void HeaderPhase(NetEventHolder eventHolder, NetBuffer buffer, Player player, SocketAsyncEventArgs args)
+        {
+            int varIntOffset;
+
+            ReadOnlySpan<byte> readingBuffer = args.Buffer.AsSpan().Slice(eventHolder.Position);
+            int size = Leb128.ReadVarInt(readingBuffer, out varIntOffset);
+
+
+            if (size > MAX_PACKET_SIZE) // Go frick yourself
+            {
+                _ = player.Kick("Illegal packet", server.GetService<Scheduler>());
+                return;
+            }
+
+            eventHolder.MsgSize = size;
+
+
+
+            if (args.BytesTransferred < eventHolder.MsgSize)
+            {
+                eventHolder.Position = args.BytesTransferred;
+                eventHolder.Phase = NetPhase.Payload;
+                // big enough?
+                buffer.Reserve(eventHolder.MsgSize);
+                readingBuffer.Slice(varIntOffset).CopyTo(buffer.Buffer!);
+            }
+            else
+            {
+                readingBuffer.Slice(varIntOffset).CopyTo(buffer.Buffer!);
+
+                receiveBuffer.Enqueue(buffer);
+
+                eventHolder.MsgSize = 0;
+                eventHolder.Position = 0;
+                eventHolder.Buffer = new NetBuffer(player, bufferPool) { Compressed = player.CompressionEnabled };
+            }
+        }
+
+        private void PayloadPhase(NetEventHolder eventHolder, NetBuffer buffer, Player player, SocketAsyncEventArgs args)
+        {
+            int bytesLeft = eventHolder.MsgSize - eventHolder.Position;
+            Buffer.BlockCopy(args.Buffer, eventHolder.Position, buffer.Buffer!, eventHolder.Position, bytesLeft);
+
+            eventHolder.Phase = NetPhase.Header;
+            eventHolder.MsgSize = 0;
+            eventHolder.Position = 0;
+
+            receiveBuffer.Enqueue(buffer);
+
+            eventHolder.Buffer = new NetBuffer(player, bufferPool) { Compressed = player.CompressionEnabled };
+        }
+
+        // This function is an attack vector as we abuse the stack here, should be rewritten to use a while loop lol.
+        private void ParseData(Player player, NetBuffer buffer, NetEventHolder eventHolder, SocketAsyncEventArgs args)
+        {
+            int bytesLeft = eventHolder.MsgSize - eventHolder.Position;
+
+            bool handleTrailingBytes = false;
+
+            if (bytesLeft < args.BytesTransferred || eventHolder.MsgSize < args.BytesTransferred)
+                handleTrailingBytes = true;
+
+            if (eventHolder.Phase == NetPhase.Header)
+                HeaderPhase(eventHolder, buffer, player, args);
+            else
+                PayloadPhase(eventHolder, buffer, player, args);
+
+
+
+            if(handleTrailingBytes)
+            {
+                // handle edge case.
+                Span<byte> remainingBytes = args.Buffer.AsSpan().Slice(bytesLeft);
+
+                eventHolder.Position = bytesLeft;
+
+                ParseData(player, buffer, eventHolder, args);
+            }
+
+            // check if eventHolder needed less data then what is remaining otherwise parse data again.
+        }
+        private void OnReceive(object? sender, SocketAsyncEventArgs args)
+        {
+            NetEventHolder eventHolder = (NetEventHolder)args.UserToken!;
+
+            Player player = eventHolder.Player;
+            NetBuffer buffer = eventHolder.Buffer;
+
+            if( !player.Connected )
+            {
+                player.Connection.Close();
+                player.Connection.Dispose();
+                return;
+            }
                 
-                lock(connections)
-                    connections.Add(new Connection(client));
-            }
-        }
-        private void HandleNetMessage(Connection connection, Stream stream, int packetId, List<Connection> toRemove)
-        {
-            if (!packetHandlers[connection.State].TryGetValue(packetId, out Type? netType))
+
+            if(args.SocketError != SocketError.Success && args.BytesTransferred <= 0)
             {
-                logger.Error($"Received unknown packet ID {packetId} in state {connection.State} from {connection.Id}, connection closed.");
+                if (player.Connected)
+                    _ = player.Kick("Socket error", server.GetService<Scheduler>(), 1000);
+                else
+                    player.Connection.Close();
 
-                connection.Close();
-                toRemove.Add(connection);
-                return;
+                return; // stop receiving client is dead.
             }
 
-            INetMessage? netMsg = Activator.CreateInstance(netType) as INetMessage;
+            //if (null == args.Buffer)
+            //    throw new Exception("Not allowed, no buffer set!");
 
-            if (null == netMsg)
+
+            if (player.CipherEnabled)
             {
-                string errMsg = $"Failed to create instance of packet ID {packetId} in state {connection.State} from {connection.Id}, connection closed.";
-                logger.Error(errMsg);
-
-                connection.Send(new KickResponse(errMsg));
-
-                connection.Close();
-                toRemove.Add(connection);
-                return;
+                byte[] deciphered = player.ReceiveCipher!.Decrypt(args.Buffer, 0, args.BytesTransferred);
+                deciphered.CopyTo(args.Buffer, 0);
             }
 
-            NetSerialization.Deserialize(netMsg, packetId, stream);
+            ParseData(player, buffer, eventHolder, args);
 
-            // don't have server object yet, need to create.
-            netMsg.Handle(connection, server);
-        }
-        private void HandlePacket(Connection connection, Stream stream, List<Connection> toRemove)
-        {
-            //Stream stream = connection.GetReadStream();
-
-            try
-            {
-                //int size = Leb128.ReadVarInt(stream); // packet length, we don't actually need this.
-                int packetId = Leb128.ReadVarInt(stream);
-                
-                HandleNetMessage(connection, stream, packetId, toRemove);
-            }
-            catch (EndOfStreamException)
-            {
-                connection.Close();
-                if (!toRemove.Contains(connection))
-                    toRemove.Add(connection);
-            }
-            catch (Exception ex)
-            {
-                logger.Exception(ex);
-                connection.Close();
-                if (!toRemove.Contains(connection))
-                    toRemove.Add(connection);
-                return;
-            }
-        }
-
-
-        // we should be receiving async so we can be more scalable and then handle all the packets on a tick as they have already been received.
-        public override void Tick(long deltaTime)
-        {
-            lock (connections)
-            {
-                List<Connection> toRemove = new();
-                // should async foreach, 1 bad connection can block the rest. ( cuck code kill it )
-                foreach (var connection in connections) // instead of doing this bull shit here, Make a queue of packets which we clear each tick.
-                {
-                    if (!connection.IsConnected())
-                    {
-                        connection.Close();
-                        //connections.Remove(connection);
-                        toRemove.Add(connection);
-                        continue;
-                    }
-
-                    if (!connection.DataAvailable())
-                        continue;
-                    //var message = connection.ReadMessage();
-
-                    Stream stream = connection.Stream;
-
-                    int length = Leb128.ReadVarInt(stream);
-
-                    byte[] data = new byte[length];
-                    stream.ReadExactly(data);
-
-                    using MemoryStream ms = new(data);
-
-
-                    if (length <= connection.CompressionThreshold)
-                    {
-                        // is compressed
-                        int compressedLength = Leb128.ReadVarInt(ms); // we ignore this, as we just assume it's right because we are lazy pieces of shit.
-
-                        using ZLibStream zStream = new ZLibStream(ms, CompressionMode.Decompress);
-
-                        int packetId = Leb128.ReadVarInt(zStream);
-                        HandleNetMessage(connection, zStream, packetId, toRemove);
-                    }
-                    else
-                    {
-                        HandlePacket(connection, ms, toRemove);
-                        continue;
-                    }
-                }
-
-                foreach (var rem in toRemove)
-                    connections.Remove(rem);
-            }
+            if (player.Connected ) // we might disconnect the client during the parsing phase.
+                player.Connection.ReceiveAsync(args);
         }
 
         public override string GetServiceName() => nameof(Network);
+        
+        private void HandlePacket(int packetId, Stream stream, Player player)
+        {
+            Type packetType = packetHandlers[player.State][packetId];
+
+
+            INetMessage? netMessage = Activator.CreateInstance(packetType) as INetMessage;
+
+
+            if (null == netMessage)
+            {
+                string errMsg = $"Failed to create instance of packet ID {packetId} in state {player.State} from {player.Id}, connection closed.";
+                logger.Error(errMsg);
+
+                _ = player.Kick(errMsg, server.GetService<Scheduler>());
+            }
+
+            NetSerialization.Deserialize(netMessage!, packetId, stream);
+
+            netMessage.Handle(null, server);
+        }
+        private void ReadCompressed(NetBuffer buffer)
+        {
+            Player player = buffer.Owner;
+
+            int uncompressedLength = Leb128.ReadVarInt(buffer.Buffer, out int readBytes);
+
+
+            byte[] packet = ZlibHelper.Decompress(buffer.Buffer.AsSpan().Slice(uncompressedLength).ToArray());
+
+            using MemoryStream stream = new MemoryStream(packet);
+
+            int id = Leb128.ReadVarInt(stream);
+
+            HandlePacket(id, stream, player);
+        }
+
+        private void ReadUncompressed(NetBuffer buffer)
+        {
+            Player player = buffer.Owner; 
+            using MemoryStream stream = buffer.GetStream();
+
+            int packetId = Leb128.ReadVarInt(stream);
+
+            HandlePacket(packetId, stream, player);
+        }
+        public override void Tick(long deltaTime)
+        {
+            base.Tick(deltaTime);
+
+            Interlocked.Exchange(ref receiveBuffer, readBuffer);
+
+            while(!readBuffer.IsEmpty)
+            {
+                if (!readBuffer.TryDequeue(out NetBuffer? buffer))
+                    continue;
+
+                if (buffer.Compressed)
+                    ReadCompressed(buffer);
+                else
+                    ReadUncompressed(buffer);
+            }
+
+        }
+
         public override void Start(Server server)
         {
             base.Start(server);
             Listen();
         }
-        
     }
 }

@@ -22,15 +22,6 @@ namespace Net.NetMessages.Serverbound
         public GameState NextState { get; set; }
 
 
-        public override void Handle(Connection connection, Server server)
-        {
-            base.Handle(connection, server);
-            // we do our shit here, this way we do not have to worry about concerns yippers
-            connection.State = NextState;
-
-            //if (NextState == GameState.Status)
-            //    connection.Send(new StatusResponse { Response = server.Status });
-            // send message?
-        }
+        public override async Task Handle(Player player, Server server) => player.State = NextState;
     }
 }

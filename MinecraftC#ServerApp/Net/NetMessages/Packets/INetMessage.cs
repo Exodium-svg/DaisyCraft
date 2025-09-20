@@ -5,7 +5,7 @@ namespace NetMessages
 {
     public class INetMessage
     {
-        public virtual void Handle(Connection connection, Server server)
+        public virtual async Task Handle(Player player, Server server)
         {
             // can do some shit here like messages handled.
         }

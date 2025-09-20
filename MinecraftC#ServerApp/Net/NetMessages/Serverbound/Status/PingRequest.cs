@@ -1,23 +1,23 @@
 ﻿using DaisyCraft;
+using Net.NetMessages.Clientbound.Status;
 using NetMessages;
 using Scheduling;
 
-namespace Net.NetMessages.Serverbound
+namespace Net.NetMessages.Serverbound.Status
 {
-    [NetMetaTag(GameState.Status, 1)]
+    [NetMetaTag(GameState.Status, 0x01)]
     public class PingRequest : INetMessage
     {
         [NetVarType(NetVarTypeEnum.Long, 0)]
         long Time { get; set; }
 
-        public override void Handle(Connection connection, Server server)
+        public override async Task Handle(Player player, Server server)
         {
-            base.Handle(connection, server);
-            connection.Send(new Clientbound.PingResponse { Time = Time });
+            await player.SendAsync(new PingResponse { Time = Time });
 
             server.GetService<Scheduler>().ScheduleDelayed(3, () =>
             {
-                connection.Close();
+                player.Connection.Close();
                 return 0;
             });
         }

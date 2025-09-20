@@ -29,11 +29,6 @@ namespace Net
 
         public object? Data { get; set; } = null;
         public int CompressionThreshold { get; set; } = -1; // 0 means no compression.
-        //Aes? Aes { get; set; } = null;
-
-        //ICryptoTransform writeTransform;
-        //Stream readStream;
-        //Stream writeStream;
         AesCfbBlockCipher? Cipher { get; set; }
         public NetworkStream Stream { get; init; }
         public Connection(TcpClient client)
