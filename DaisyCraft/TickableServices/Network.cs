@@ -5,38 +5,35 @@ using Net.NetMessages;
 using Net.NetMessages.Packets;
 using NetMessages;
 using Scheduling;
-using System;
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
-using System.Text.Json.Serialization;
 using Utils;
 
 namespace TickableServices
 {
-    public enum NetPhase
-    {
-        Header,
-        Payload,
-    }
     public class NetEventHolder
     {
+        public Lock TransactionLock { get; init; } = new();
         public NetBuffer Buffer { get; set; }
         public Player Player { get; init; }
-        public int Position { get; set; } = 0;
-        public int MsgSize { get; set; } = 0;
-        public NetPhase Phase { get; set; } = NetPhase.Header;
+        public byte[] TcpBuffer { get; init; }
 
-        public NetEventHolder(NetBuffer netBuffer, Player player)
+        public bool ReceivingPayload { get; set; } = false;
+        //public NetPhase Phase { get; set; } = NetPhase.Header;
+
+        public NetEventHolder(NetBuffer netBuffer, Player player, byte[] buffer)
         {
             Buffer = netBuffer;
             Player = player;
+            TcpBuffer = buffer;
         }
     }
     public class Network : TickableService
     {
+        public const int PROTOCOL_VERSION = 772;
         const int MAX_PACKET_SIZE = 200000;
 
         List<Player> players = new List<Player>();
@@ -53,12 +50,12 @@ namespace TickableServices
         Socket listener;
         ArrayPool<byte> bufferPool = ArrayPool<byte>.Shared;
 
-        ConcurrentQueue<NetBuffer> readBuffer = new ConcurrentQueue<NetBuffer>();
-        ConcurrentQueue<NetBuffer> receiveBuffer = new ConcurrentQueue<NetBuffer>();
+        ConcurrentQueue<NetBuffer> backBuffer = new();
+        ConcurrentQueue<NetBuffer> readBuffer = new();
+        ConcurrentQueue<NetBuffer> receiveBuffer = new();
 
         public Network(string address, int port, Logger logger, Assembly packetAssembly, IEnumerable<string>? bannedIps = null)
         {
-            this.server = server;
             Address = address;
             Port = port;
             this.logger = logger;
@@ -132,11 +129,8 @@ namespace TickableServices
                     remoteSocket.Close();
                     continue;
                 }
-                    
-
 
                 Player player = new Player(remoteSocket);
-
 
                 player.Connection.ReceiveTimeout = server.Options.GetVar<int>("net.timeout", 1000);
                 player.Connection.SendTimeout = server.Options.GetVar<int>("net.timeout", 1000);
@@ -145,146 +139,118 @@ namespace TickableServices
                     players.Add(player);
 
                 SocketAsyncEventArgs socketAsyncEventArgs = new SocketAsyncEventArgs();
-                socketAsyncEventArgs.UserToken = new NetEventHolder(new NetBuffer(player, bufferPool), player);
-                socketAsyncEventArgs.SetBuffer(new byte[1024]);
+                NetEventHolder eventHolder = new NetEventHolder(new NetBuffer(player, bufferPool), player, new byte[1024]);
+                socketAsyncEventArgs.UserToken = eventHolder;
+                socketAsyncEventArgs.SetBuffer(eventHolder.TcpBuffer);
                 socketAsyncEventArgs.Completed += OnReceive;
+                
+                var pending = remoteSocket.ReceiveAsync(socketAsyncEventArgs);
 
-
-                remoteSocket.ReceiveAsync(socketAsyncEventArgs);
+                if( false == pending )
+                    _ = Task.Run(() => OnReceive(null, socketAsyncEventArgs));
+                
             }
         }
-        private void HeaderPhase(NetEventHolder eventHolder, NetBuffer buffer, Player player, SocketAsyncEventArgs args)
+        private NetBuffer ParsePacket(Player player, ReadOnlySpan<byte> data, ref int offset)
         {
-            int varIntOffset;
+            ReadOnlySpan<byte> offsetBuffer = data.Slice(offset);
+            int size = Leb128.ReadVarInt(data, out int varIntOffset);
+            
+            offset += varIntOffset;
+            
+            NetBuffer buffer = new NetBuffer(player, bufferPool) { Compressed = player.CompressionEnabled };
+            buffer.Reserve(size);
+            offsetBuffer.Slice(offset, size).CopyTo((buffer.Buffer));
+            
+            offset += size;
 
-            ReadOnlySpan<byte> readingBuffer = args.Buffer.AsSpan().Slice(eventHolder.Position);
-            int size = Leb128.ReadVarInt(readingBuffer, out varIntOffset);
-
-
-            if (size > MAX_PACKET_SIZE) // Go frick yourself
-            {
-                _ = player.Kick("Illegal packet", server.GetService<Scheduler>());
-                return;
-            }
-
-            eventHolder.MsgSize = size;
-
-
-
-            if (args.BytesTransferred < eventHolder.MsgSize)
-            {
-                eventHolder.Position = args.BytesTransferred;
-                eventHolder.Phase = NetPhase.Payload;
-                // big enough?
-                buffer.Reserve(eventHolder.MsgSize);
-                readingBuffer.Slice(varIntOffset).CopyTo(buffer.Buffer!);
-            }
-            else
-            {
-                readingBuffer.Slice(varIntOffset).CopyTo(buffer.Buffer!);
-
-                receiveBuffer.Enqueue(buffer);
-
-                eventHolder.MsgSize = 0;
-                eventHolder.Position = 0;
-                eventHolder.Buffer = new NetBuffer(player, bufferPool) { Compressed = player.CompressionEnabled };
-            }
-        }
-
-        private void PayloadPhase(NetEventHolder eventHolder, NetBuffer buffer, Player player, SocketAsyncEventArgs args)
-        {
-            int bytesLeft = eventHolder.MsgSize - eventHolder.Position;
-            Buffer.BlockCopy(args.Buffer, eventHolder.Position, buffer.Buffer!, eventHolder.Position, bytesLeft);
-
-            eventHolder.Phase = NetPhase.Header;
-            eventHolder.MsgSize = 0;
-            eventHolder.Position = 0;
-
-            receiveBuffer.Enqueue(buffer);
-
-            eventHolder.Buffer = new NetBuffer(player, bufferPool) { Compressed = player.CompressionEnabled };
-        }
-
-        // This function is an attack vector as we abuse the stack here, should be rewritten to use a while loop lol.
-        private void ParseData(Player player, NetBuffer buffer, NetEventHolder eventHolder, SocketAsyncEventArgs args)
-        {
-            int bytesLeft = eventHolder.MsgSize - eventHolder.Position;
-
-            bool handleTrailingBytes = false;
-
-            if (bytesLeft < args.BytesTransferred || eventHolder.MsgSize < args.BytesTransferred)
-                handleTrailingBytes = true;
-
-            if (eventHolder.Phase == NetPhase.Header)
-                HeaderPhase(eventHolder, buffer, player, args);
-            else
-                PayloadPhase(eventHolder, buffer, player, args);
-
-
-
-            if(handleTrailingBytes)
-            {
-                // handle edge case.
-                Span<byte> remainingBytes = args.Buffer.AsSpan().Slice(bytesLeft);
-
-                eventHolder.Position = bytesLeft;
-
-                ParseData(player, buffer, eventHolder, args);
-            }
-
-            // check if eventHolder needed less data then what is remaining otherwise parse data again.
+            return buffer; //receiveBuffer.Enqueue(buffer);
         }
         private void OnReceive(object? sender, SocketAsyncEventArgs args)
         {
+            
             NetEventHolder eventHolder = (NetEventHolder)args.UserToken!;
-
             Player player = eventHolder.Player;
             NetBuffer buffer = eventHolder.Buffer;
 
-            if( !player.Connected )
+            lock (eventHolder.TransactionLock)
             {
-                player.Connection.Close();
-                player.Connection.Dispose();
-                return;
-            }
                 
+                Span<byte> socketBuffer = eventHolder.TcpBuffer.AsSpan().Slice(0, args.BytesTransferred);
 
-            if(args.SocketError != SocketError.Success && args.BytesTransferred <= 0)
-            {
-                if (player.Connected)
-                    _ = player.Kick("Socket error", server.GetService<Scheduler>(), 1000);
-                else
+                if (!player.Connected)
+                {
                     player.Connection.Close();
+                    player.Connection.Dispose();
+                    return;
+                }
 
-                return; // stop receiving client is dead.
+                if (args.SocketError != SocketError.Success || args.BytesTransferred <= 0)
+                {
+                    if (player.Connected)
+                        _ = player.Kick("Socket error", server.GetService<Scheduler>(), 1000);
+                    else
+                        player.Connection.Close();
+
+                    return; // stop receiving client is dead.
+                }
+                
+                //logger.Info($"packet received length: {args.BytesTransferred}");
+                
+                Span<byte> packet;
+                if (player.CipherEnabled)
+                    packet = player.ReceiveCipher!.Decrypt(socketBuffer, 0, args.BytesTransferred);
+                else
+                    packet = socketBuffer;
+
+                try
+                {
+                    int bytesRead = 0;
+                    while (bytesRead < args.BytesTransferred)
+                    {
+                        
+                        if( false == Leb128.IsValidVarInt(packet.Slice(bytesRead))) // broken and fucked to do fix this
+                        {
+                            // mangled packet OR not complete varint which is out of bounds.
+                            logger.Warn("Not implemented yet but we get here? efficient routing wat?");
+
+                        }
+                            
+                        
+                        NetBuffer buff = ParsePacket(player, packet, ref bytesRead);
+
+                        if (buff.Length > packet.Length)
+                        {
+                            // set to receive the rest on next receive.
+                            eventHolder.Buffer = buff;
+                            eventHolder.ReceivingPayload = true;
+                        }
+
+                        receiveBuffer.Enqueue(buff);
+                    }
+
+                    //ParseData(player, buffer, eventHolder, args); 
+                }
+
+                catch (SocketException) { }
+                catch (Exception e) { server.Logger.Exception(e); player.Connection.Close(); } // problemmatic exception of any kind disconnects.
+
+
             }
-
-            //if (null == args.Buffer)
-            //    throw new Exception("Not allowed, no buffer set!");
-
-
-            if (player.CipherEnabled)
-            {
-                byte[] deciphered = player.ReceiveCipher!.Decrypt(args.Buffer, 0, args.BytesTransferred);
-                deciphered.CopyTo(args.Buffer, 0);
-            }
-
-            try
-            {
-                ParseData(player, buffer, eventHolder, args);
-            }
-            catch (SocketException) { }
-            catch (Exception e) { server.Logger.Exception(e); player.Connection.Close(); }
+            if ( false == player.Connected ) 
+                return;// we might disconnect the client during the parsing phase.
             
-
-            if (player.Connected ) // we might disconnect the client during the parsing phase.
-                player.Connection.ReceiveAsync(args);
+            bool pending = player.Connection.ReceiveAsync(args);
+            
+            if( false == pending )
+                OnReceive(null, args);
         }
 
         public override string GetServiceName() => nameof(Network);
         
         private Task HandlePacket(int packetId, Stream stream, Player player, NetBuffer buffer)
         {
+            logger.Info($"packet id received: {packetId}");
             Type packetType = packetHandlers[player.State][packetId];
 
 
@@ -311,16 +277,18 @@ namespace TickableServices
 
             int uncompressedLength = Leb128.ReadVarInt(buffer.Buffer, out int readBytes);
 
-
-            byte[] packet = ZlibHelper.Decompress(buffer.Buffer.AsSpan().Slice(uncompressedLength).ToArray());
-
+            byte[] packet;
+            if (uncompressedLength != 0)
+                packet = ZlibHelper.Decompress(buffer.Buffer.AsSpan().Slice(uncompressedLength).ToArray());
+            else
+                packet = buffer.Buffer!;
+            
             using MemoryStream stream = new MemoryStream(packet);
 
             int id = Leb128.ReadVarInt(stream);
 
             return HandlePacket(id, stream, player, buffer);
         }
-
         private Task ReadUncompressed(NetBuffer buffer)
         {
             Player player = buffer.Owner; 
@@ -333,8 +301,12 @@ namespace TickableServices
         public override void Tick(long deltaTime)
         {
             base.Tick(deltaTime);
+            
+            var oldReceive = Interlocked.Exchange(ref receiveBuffer, backBuffer);
+            var oldRead = Interlocked.Exchange(ref readBuffer, oldReceive);
 
-            Interlocked.Exchange(ref receiveBuffer, readBuffer);
+            backBuffer = oldRead;
+
 
             List<Task> tasksToComplete = new(readBuffer.Count);
 
@@ -343,30 +315,35 @@ namespace TickableServices
                 if (!readBuffer.TryDequeue(out NetBuffer? buffer))
                     continue;
 
-                if (buffer.Compressed)
-                    tasksToComplete.Add(ReadCompressed(buffer));
-                else
-                    tasksToComplete.Add(ReadUncompressed(buffer));
+                try
+                {
+                    if (buffer.Compressed)
+                        tasksToComplete.Add(ReadCompressed(buffer));
+                    else
+                        tasksToComplete.Add(ReadUncompressed(buffer));
+                } catch(Exception e)
+                {
+                    logger.Exception(e);
+                }
             }
 
-            tasksToComplete.Add(Task.Factory.StartNew(() =>
-            {
-                List<Player> playersToRemove = new();
+            Task waitTask = Task.WhenAll(tasksToComplete);
 
-                lock (players)
-                {
-                    foreach (Player player in players)
+            lock (players)
+                players.RemoveAll((player) => {
+
+                    if(!player.Connected)
                     {
-                        if (!player.Connected)
-                            playersToRemove.Add(player);
+                        if(player.Id != 0)
+                            server.OnPlayerLeave(player.Id);
+
+                        return true;
                     }
 
-                    foreach (Player player in playersToRemove)
-                        players.Remove(player);
-                }
-            }));
+                    return false;
+                    });
 
-            Task.WhenAll(tasksToComplete).Wait();
+            waitTask.Wait();
         }
 
         public override void Start(Server server)

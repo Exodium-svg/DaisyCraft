@@ -4,6 +4,28 @@ namespace Net
 {
     public static class Leb128
     {
+        public static bool IsValidVarInt(ReadOnlySpan<byte> bytes)
+        {
+            int numRead = 0;
+            byte read;
+
+            do
+            {
+                if (numRead >= bytes.Length)
+                    return false;
+
+                read = bytes[numRead];
+                numRead++;
+
+                // VarInt can be at most 5 bytes
+                if (numRead > 5)
+                    return false;
+
+            } while ((read & 0b1000_0000) != 0);
+
+            return true;
+        }
+
         public static int SizeOfVarInt(int value)
         {
             int size = 0;
@@ -43,8 +65,7 @@ namespace Net
             do
             {
                 int readByte = bytes[numRead];
-                if (readByte == -1)
-                    throw new EndOfStreamException("Stream ended while attempting to read VarInt.");
+                
                 read = (byte)readByte;
                 int value = (read & 0b01111111);
                 result |= (value << (7 * numRead));

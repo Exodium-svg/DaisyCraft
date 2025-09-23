@@ -14,7 +14,11 @@ namespace DaisyCraft
 
         ConcurrentDictionary<string, TickableService> tickableServices = new();
 
-        public ServerStatus Status { get; set; } = new(772, true, "DaisyCraft server", 20, 0);
+        public ServerStatus Status { get; set; } = new(
+            Network.PROTOCOL_VERSION, 
+            true, 
+            "DaisyCraft server", 
+            20, 0);
         public Logger Logger { get; init; }
         public Settings Options { get; init; }
         public SessionService SessionService { get; init; }
@@ -23,8 +27,15 @@ namespace DaisyCraft
             Options = options;
             Logger = logger;
             SessionService = new("user-cache");
+
+            Status.Description = options.GetVar("motd.status", "DaisyCraft server");
         }
         
+        public void OnPlayerLeave(ulong id)
+        {
+
+        }
+
         public void RegisterService(TickableService service) {
             string serviceName = service.GetServiceName();
             tickableServices[serviceName] = service;

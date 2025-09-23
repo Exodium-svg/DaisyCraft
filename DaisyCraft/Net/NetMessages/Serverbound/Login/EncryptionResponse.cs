@@ -1,11 +1,8 @@
-﻿using DaisyCraft;
-using DaisyCraft.Utils;
-using Net.NetMessages.Clientbound.Login;
-using Net.NetMessages.Clientbound;
-using NetMessages;
-using Scheduling;
+﻿using Net.NetMessages.Clientbound.Login;
 using System.Security.Cryptography;
-using System.Text.Json;
+using NetMessages;
+using DaisyCraft;
+using Scheduling;
 using Utils;
 
 namespace Net.NetMessages.Serverbound
@@ -46,11 +43,8 @@ namespace Net.NetMessages.Serverbound
 
 
             // need a type of usercache so we don't keep spamming this api...
-            Task<MojangApiResponse?> task = MojangApi.HasJoined(player.Username, AesCipher, data.Rsa.ExportSubjectPublicKeyInfo());
+            MojangApiResponse? response = await MojangApi.HasJoined(player.Username, AesCipher, data.Rsa.ExportSubjectPublicKeyInfo());
 
-            task.Wait();
-
-            MojangApiResponse? response = task.Result;
 
             if ( null == response )
             {
