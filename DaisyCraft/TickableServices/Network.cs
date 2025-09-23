@@ -7,6 +7,7 @@ using NetMessages;
 using Scheduling;
 using System.Buffers;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
@@ -17,16 +18,14 @@ namespace TickableServices
     public class NetEventHolder
     {
         public Lock TransactionLock { get; init; } = new();
-        public NetBuffer Buffer { get; set; }
         public Player Player { get; init; }
         public byte[] TcpBuffer { get; init; }
-
+        public byte[]? TrailingBuffer { get; set; } = null;
         public bool ReceivingPayload { get; set; } = false;
         //public NetPhase Phase { get; set; } = NetPhase.Header;
 
-        public NetEventHolder(NetBuffer netBuffer, Player player, byte[] buffer)
+        public NetEventHolder(Player player, byte[] buffer)
         {
-            Buffer = netBuffer;
             Player = player;
             TcpBuffer = buffer;
         }
@@ -139,7 +138,7 @@ namespace TickableServices
                     players.Add(player);
 
                 SocketAsyncEventArgs socketAsyncEventArgs = new SocketAsyncEventArgs();
-                NetEventHolder eventHolder = new NetEventHolder(new NetBuffer(player, bufferPool), player, new byte[1024]);
+                NetEventHolder eventHolder = new NetEventHolder(player, new byte[1024]);
                 socketAsyncEventArgs.UserToken = eventHolder;
                 socketAsyncEventArgs.SetBuffer(eventHolder.TcpBuffer);
                 socketAsyncEventArgs.Completed += OnReceive;
@@ -154,13 +153,13 @@ namespace TickableServices
         private NetBuffer ParsePacket(Player player, ReadOnlySpan<byte> data, ref int offset)
         {
             ReadOnlySpan<byte> offsetBuffer = data.Slice(offset);
-            int size = Leb128.ReadVarInt(data, out int varIntOffset);
+            int size = Leb128.ReadVarInt(offsetBuffer, out int varIntOffset);
             
             offset += varIntOffset;
             
             NetBuffer buffer = new NetBuffer(player, bufferPool) { Compressed = player.CompressionEnabled };
             buffer.Reserve(size);
-            offsetBuffer.Slice(offset, size).CopyTo((buffer.Buffer));
+            data.Slice(offset, size).CopyTo((buffer.Buffer));
             
             offset += size;
 
@@ -171,7 +170,6 @@ namespace TickableServices
             
             NetEventHolder eventHolder = (NetEventHolder)args.UserToken!;
             Player player = eventHolder.Player;
-            NetBuffer buffer = eventHolder.Buffer;
 
             lock (eventHolder.TransactionLock)
             {
@@ -203,6 +201,13 @@ namespace TickableServices
                 else
                     packet = socketBuffer;
 
+
+                if(packet.Length == 19)
+                {
+                    int a = 10;
+                }
+                    
+
                 try
                 {
                     int bytesRead = 0;
@@ -212,7 +217,7 @@ namespace TickableServices
                         if( false == Leb128.IsValidVarInt(packet.Slice(bytesRead))) // broken and fucked to do fix this
                         {
                             // mangled packet OR not complete varint which is out of bounds.
-                            logger.Warn("Not implemented yet but we get here? efficient routing wat?");
+                            logger.Warn("Not implemented yet but we get here? efficient routing wat?"); // should do all the buffer magic in here and remove net buffer from the transaction
 
                         }
                             
@@ -222,7 +227,6 @@ namespace TickableServices
                         if (buff.Length > packet.Length)
                         {
                             // set to receive the rest on next receive.
-                            eventHolder.Buffer = buff;
                             eventHolder.ReceivingPayload = true;
                         }
 
@@ -250,7 +254,7 @@ namespace TickableServices
         
         private Task HandlePacket(int packetId, Stream stream, Player player, NetBuffer buffer)
         {
-            logger.Info($"packet id received: {packetId}");
+            //logger.Info($"packet id received: {packetId}");
             Type packetType = packetHandlers[player.State][packetId];
 
 

@@ -61,8 +61,9 @@ namespace Net.NetMessages.Serverbound
             player.SetCompression(threshold);
 
 
-            //connection.Send(new KickResponse("It works now"));
-            await player.SendAsync(new LoginSuccess(player.Uuid, player.Username));
+            await player.SendAsync(new KickResponse("Implement bundled packet processing before going on"));
+            //Console.WriteLine(" Login success sent here ");
+            //await player.SendAsync(new LoginSuccess(player.Uuid, player.Username));
 
             //connection.State = GameState.Configuration;
             //connection.Send(new KickResponse("TODO: go to compression stage -> configuration state asflkjfasdlkjafsdjklasfdjklafsdjklasdfajklsfdjklkjlasdfkjlafsdjlkjkl"));
