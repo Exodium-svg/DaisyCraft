@@ -1,12 +1,12 @@
 ﻿using DaisyCraft;
 using Net;
 using Net.NetMessages.Clientbound;
-using NetMessages;
+using NetMessages.Serverbound;
 
 namespace Net.NetMessages.Serverbound
 {
     [NetMetaTag(GameState.Unknown, 0x00)]
-    public class Handshake : INetMessage
+    public class Handshake : ServerBoundPacket
     {
         [NetVarType(NetVarTypeEnum.Varint, 0)]
         public int Version { get; set; }

@@ -1,4 +1,4 @@
-﻿using NetMessages;
+﻿using NetMessages.Serverbound;
 using System.Reflection;
 using Utils;
 
@@ -82,7 +82,7 @@ namespace Net.NetMessages
         }
         
         // if too slow we can also turn this into code gen.
-        public static void Deserialize(INetMessage netMsg, int msgId, Stream stream)
+        public static void Deserialize(ServerBoundPacket netMsg, int msgId, Stream stream)
         {
             // do deserialization here.
             Type type = netMsg.GetType();

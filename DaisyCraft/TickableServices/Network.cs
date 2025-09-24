@@ -3,7 +3,7 @@ using DaisyCraft.Utils;
 using Net;
 using Net.NetMessages;
 using Net.NetMessages.Packets;
-using NetMessages;
+using NetMessages.Serverbound;
 using Scheduling;
 using System.Buffers;
 using System.Collections.Concurrent;
@@ -68,7 +68,7 @@ namespace TickableServices
             }
 
             // Load all packet types from the assembly with correct game state ( rip cpu cycles / memory )
-            IEnumerable<Type> netMsgTypes = packetAssembly.GetTypes().Where((t) => t.IsClass == true && t.GetCustomAttribute<NetMetaTag>() != null && typeof(INetMessage).IsAssignableFrom(t));
+            IEnumerable<Type> netMsgTypes = packetAssembly.GetTypes().Where((t) => t.IsClass == true && t.GetCustomAttribute<NetMetaTag>() != null && typeof(ServerBoundPacket).IsAssignableFrom(t));
 
 
             if (netMsgTypes.Count() == 0)
@@ -150,12 +150,12 @@ namespace TickableServices
                 
             }
         }
-        private NetBuffer ParsePacket(Player player, ReadOnlySpan<byte> data, ref int offset)
+        private NetBuffer ParsePacket(Player player, ReadOnlySpan<byte> data, ref int offset, int size)
         {
             ReadOnlySpan<byte> offsetBuffer = data.Slice(offset);
-            int size = Leb128.ReadVarInt(offsetBuffer, out int varIntOffset);
+            //int size = Leb128.ReadVarInt(offsetBuffer, out int varIntOffset);
             
-            offset += varIntOffset;
+            //offset += offset;
             
             NetBuffer buffer = new NetBuffer(player, bufferPool) { Compressed = player.CompressionEnabled };
             buffer.Reserve(size);
@@ -163,7 +163,7 @@ namespace TickableServices
             
             offset += size;
 
-            return buffer; //receiveBuffer.Enqueue(buffer);
+            return buffer;
         }
         private void OnReceive(object? sender, SocketAsyncEventArgs args)
         {
@@ -200,13 +200,7 @@ namespace TickableServices
                     packet = player.ReceiveCipher!.Decrypt(socketBuffer, 0, args.BytesTransferred);
                 else
                     packet = socketBuffer;
-
-
-                if(packet.Length == 19)
-                {
-                    int a = 10;
-                }
-                    
+                // add another case here for out of bounds packet handling      
 
                 try
                 {
@@ -217,18 +211,23 @@ namespace TickableServices
                         if( false == Leb128.IsValidVarInt(packet.Slice(bytesRead))) // broken and fucked to do fix this
                         {
                             // mangled packet OR not complete varint which is out of bounds.
-                            logger.Warn("Not implemented yet but we get here? efficient routing wat?"); // should do all the buffer magic in here and remove net buffer from the transaction
-
+                            throw new Exception(" TODO IMPLEMENT ME ");
                         }
-                            
-                        
-                        NetBuffer buff = ParsePacket(player, packet, ref bytesRead);
 
-                        if (buff.Length > packet.Length)
+
+                        // validate if our size fits in our buffer otherwise we cache it and do it again
+                        int size = Leb128.ReadVarInt(packet.Slice(bytesRead), ref bytesRead);
+
+                        if( args.BytesTransferred < size )
                         {
-                            // set to receive the rest on next receive.
-                            eventHolder.ReceivingPayload = true;
+                            // special case where we need to store state as we didn't receive things past the header.
+                            throw new Exception(" TODO IMPLEMENT ME ");
                         }
+
+
+                        NetBuffer buff = ParsePacket(player, packet, ref bytesRead, size);
+                        
+                        // make a case somehow for missing packet data as not fully received.
 
                         receiveBuffer.Enqueue(buff);
                     }
@@ -253,12 +252,11 @@ namespace TickableServices
         public override string GetServiceName() => nameof(Network);
         
         private Task HandlePacket(int packetId, Stream stream, Player player, NetBuffer buffer)
-        {
-            //logger.Info($"packet id received: {packetId}");
+        { 
             Type packetType = packetHandlers[player.State][packetId];
 
 
-            INetMessage? netMessage = Activator.CreateInstance(packetType) as INetMessage;
+            ServerBoundPacket? netMessage = Activator.CreateInstance(packetType) as ServerBoundPacket;
 
 
             if (null == netMessage)
@@ -278,8 +276,8 @@ namespace TickableServices
         private Task ReadCompressed(NetBuffer buffer)
         {
             Player player = buffer.Owner;
-
-            int uncompressedLength = Leb128.ReadVarInt(buffer.Buffer, out int readBytes);
+            int readBytes = 0;
+            int uncompressedLength = Leb128.ReadVarInt(buffer.Buffer, ref readBytes);
 
             byte[] packet;
             if (uncompressedLength != 0)

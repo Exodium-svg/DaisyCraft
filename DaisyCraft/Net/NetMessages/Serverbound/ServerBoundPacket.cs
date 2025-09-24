@@ -1,9 +1,9 @@
 ﻿using DaisyCraft;
 using Net;
 
-namespace NetMessages
+namespace NetMessages.Serverbound
 {
-    public class INetMessage
+    public class ServerBoundPacket
     {
         public virtual async Task Handle(Player player, Server server)
         {

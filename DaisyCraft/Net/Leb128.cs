@@ -57,7 +57,7 @@ namespace Net
             return result;
         }
 
-        public static int ReadVarInt(ReadOnlySpan<byte> bytes, out int readBytes)
+        public static int ReadVarInt(ReadOnlySpan<byte> bytes, ref int readBytes)
         {
             int numRead = 0;
             int result = 0;
@@ -74,7 +74,7 @@ namespace Net
                     throw new InvalidDataException("VarInt is too big");
             } while ((read & 0b10000000) != 0);
 
-            readBytes = numRead;
+            readBytes += numRead;
             return result;
         }
 

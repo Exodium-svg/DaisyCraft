@@ -1,6 +1,6 @@
 ﻿using Net.NetMessages.Clientbound.Login;
 using System.Security.Cryptography;
-using NetMessages;
+using NetMessages.Serverbound;
 using DaisyCraft;
 using Scheduling;
 using Utils;
@@ -8,7 +8,7 @@ using Utils;
 namespace Net.NetMessages.Serverbound
 {
     [NetMetaTag(GameState.Login, 0x01)]
-    public class EncryptionResponse : INetMessage
+    public class EncryptionResponse : ServerBoundPacket
     {
         [NetVarType(NetVarTypeEnum.ByteArray, 0)]
         public byte[] AesCipher { get; set; }
@@ -56,14 +56,15 @@ namespace Net.NetMessages.Serverbound
 
             int threshold = server.Options.GetVar<int>("net.compression.threshold", 127);
 
-            await player.SendAsync(new SetCompression(threshold));
+            //await player.SendAsync(new SetCompression(threshold));
 
-            player.SetCompression(threshold);
+            await player.SetCompression(threshold);
 
 
-            await player.SendAsync(new KickResponse("Implement bundled packet processing before going on"));
+            //await player.SendAsync(new KickResponse("Implement bundled packet processing before going on"));
             //Console.WriteLine(" Login success sent here ");
-            //await player.SendAsync(new LoginSuccess(player.Uuid, player.Username));
+
+            await player.SendAsync(new LoginSuccess(player.Uuid, player.Username));
 
             //connection.State = GameState.Configuration;
             //connection.Send(new KickResponse("TODO: go to compression stage -> configuration state asflkjfasdlkjafsdjklasfdjklafsdjklasdfajklsfdjklkjlasdfkjlafsdjlkjkl"));

@@ -34,15 +34,25 @@ namespace Net
 
         public void SetCipher(byte[] cipherKey)
         {
+            if (State != GameState.Login)
+                throw new Exception("Cipher may only be set during login.");
+
             SendCipher = new AesCfbBlockCipher(cipherKey);
             ReceiveCipher = new AesCfbBlockCipher(cipherKey);
             CipherEnabled = true;
         }
 
-        public void SetCompression(int threshold)
+        public async Task SetCompression(int threshold)
         {
+            if (State != GameState.Login)
+                throw new Exception("Not allowed, May only be set during login.");
+
+            await SendAsync(new SetCompression(threshold));
+
             CompressionThreshold = threshold;
             CompressionEnabled = true;
+
+            
         }
 
         public async Task Kick(string reason, Scheduler scheduler, int disconnectDelay = 1000)

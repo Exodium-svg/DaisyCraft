@@ -1,12 +1,12 @@
 ﻿using DaisyCraft;
 using Net.NetMessages.Clientbound.Login;
-using NetMessages;
+using NetMessages.Serverbound;
 using System.Security.Cryptography;
 
 namespace Net.NetMessages.Serverbound
 {
     [NetMetaTag(GameState.Login, 0x00)]
-    public class LoginStart : INetMessage
+    public class LoginStart : ServerBoundPacket
     {
         [NetVarType(NetVarTypeEnum.String, 0)]
         public string Username { get; set; } = string.Empty;

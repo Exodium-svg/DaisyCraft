@@ -2,13 +2,13 @@
 using Net;
 using Net.NetMessages;
 using Net.NetMessages.Clientbound.Status;
-using NetMessages;
+using NetMessages.Serverbound;
 using System.Text.Json;
 
 namespace Net.NetMessages.Serverbound.Status
 {
     [NetMetaTag(GameState.Status, 0x00)]
-    public class StatusAck : INetMessage
+    public class StatusAck : ServerBoundPacket
     {
         public override async Task Handle(Player player, Server server)
         {

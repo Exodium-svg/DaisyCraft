@@ -1,12 +1,12 @@
 ﻿using DaisyCraft;
 using Net.NetMessages.Clientbound.Status;
-using NetMessages;
+using NetMessages.Serverbound;
 using Scheduling;
 
 namespace Net.NetMessages.Serverbound.Status
 {
     [NetMetaTag(GameState.Status, 0x01)]
-    public class PingRequest : INetMessage
+    public class PingRequest : ServerBoundPacket
     {
         [NetVarType(NetVarTypeEnum.Long, 0)]
         long Time { get; set; }
