@@ -3,7 +3,7 @@ using Net.NetMessages;
 
 namespace Net.NetMessages.Clientbound.Login
 {
-    [NetMetaTag(GameState.Login, 0x03)]
+    [PacketMetaData(GameState.Login, 0x03)]
     public class SetCompression
     {
         [NetVarType(NetVarTypeEnum.Varint, 0)]

@@ -7,7 +7,7 @@ using Utils;
 
 namespace Net.NetMessages.Serverbound
 {
-    [NetMetaTag(GameState.Login, 0x01)]
+    [PacketMetaData(GameState.Login, 0x01)]
     public class EncryptionResponse : ServerBoundPacket
     {
         [NetVarType(NetVarTypeEnum.ByteArray, 0)]
@@ -35,16 +35,11 @@ namespace Net.NetMessages.Serverbound
                 return;
             }
 
-            // we will invalidate this, it's kind of bad as we are creating 3rd generation garbage, maybe use a structure? for passing it around my value instead of reference.
             player.Data = null;
-
-            // Enable encryption.
             player.SetCipher(AesCipher);
-
 
             // need a type of usercache so we don't keep spamming this api...
             MojangApiResponse? response = await MojangApi.HasJoined(player.Username, AesCipher, data.Rsa.ExportSubjectPublicKeyInfo());
-
 
             if ( null == response )
             {
@@ -54,20 +49,8 @@ namespace Net.NetMessages.Serverbound
                 return;
             }
 
-            int threshold = server.Options.GetVar<int>("net.compression.threshold", 127);
-
-            //await player.SendAsync(new SetCompression(threshold));
-
-            await player.SetCompression(threshold);
-
-
-            //await player.SendAsync(new KickResponse("Implement bundled packet processing before going on"));
-            //Console.WriteLine(" Login success sent here ");
-
+            await player.SetCompression(server.Options.GetVar<int>("net.compression.threshold", 127));
             await player.SendAsync(new LoginSuccess(player.Uuid, player.Username));
-
-            //connection.State = GameState.Configuration;
-            //connection.Send(new KickResponse("TODO: go to compression stage -> configuration state asflkjfasdlkjafsdjklasfdjklafsdjklasdfajklsfdjklkjlasdfkjlafsdjlkjkl"));
 
         }
     }

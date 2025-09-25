@@ -13,7 +13,7 @@ namespace Net.NetMessages
             Type type = obj.GetType();
 
             // Get message ID from NetMetaTag
-            var metaTag = type.GetCustomAttribute<NetMetaTag>();
+            var metaTag = type.GetCustomAttribute<PacketMetaData>();
             if (metaTag == null)
                 throw new InvalidDataException($"Type {type.FullName} is missing NetMetaTag attribute.");
 
@@ -87,7 +87,7 @@ namespace Net.NetMessages
             // do deserialization here.
             Type type = netMsg.GetType();
 
-            var tag = type.GetCustomAttribute<NetMetaTag>();
+            var tag = type.GetCustomAttribute<PacketMetaData>();
 
             if (null == tag)
                 throw new InvalidDataException($"Type {type.FullName} is missing NetMetaTag attribute.");

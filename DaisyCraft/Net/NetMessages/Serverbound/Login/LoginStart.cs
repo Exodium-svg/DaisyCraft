@@ -5,7 +5,7 @@ using System.Security.Cryptography;
 
 namespace Net.NetMessages.Serverbound
 {
-    [NetMetaTag(GameState.Login, 0x00)]
+    [PacketMetaData(GameState.Login, 0x00)]
     public class LoginStart : ServerBoundPacket
     {
         [NetVarType(NetVarTypeEnum.String, 0)]

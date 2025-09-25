@@ -3,7 +3,7 @@ using Net.NetMessages;
 
 namespace Net.NetMessages.Clientbound.Login
 {
-    [NetMetaTag(GameState.Login, 0x02)]
+    [PacketMetaData(GameState.Login, 0x02)]
     public class LoginSuccess
     {
         [NetVarType(NetVarTypeEnum.UUID, 0)]

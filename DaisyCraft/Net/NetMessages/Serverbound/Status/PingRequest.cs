@@ -5,7 +5,7 @@ using Scheduling;
 
 namespace Net.NetMessages.Serverbound.Status
 {
-    [NetMetaTag(GameState.Status, 0x01)]
+    [PacketMetaData(GameState.Status, 0x01)]
     public class PingRequest : ServerBoundPacket
     {
         [NetVarType(NetVarTypeEnum.Long, 0)]

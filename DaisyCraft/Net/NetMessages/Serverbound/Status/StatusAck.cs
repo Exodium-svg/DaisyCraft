@@ -7,7 +7,7 @@ using System.Text.Json;
 
 namespace Net.NetMessages.Serverbound.Status
 {
-    [NetMetaTag(GameState.Status, 0x00)]
+    [PacketMetaData(GameState.Status, 0x00)]
     public class StatusAck : ServerBoundPacket
     {
         public override async Task Handle(Player player, Server server)

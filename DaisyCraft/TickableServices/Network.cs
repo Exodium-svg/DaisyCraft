@@ -68,7 +68,7 @@ namespace TickableServices
             }
 
             // Load all packet types from the assembly with correct game state ( rip cpu cycles / memory )
-            IEnumerable<Type> netMsgTypes = packetAssembly.GetTypes().Where((t) => t.IsClass == true && t.GetCustomAttribute<NetMetaTag>() != null && typeof(ServerBoundPacket).IsAssignableFrom(t));
+            IEnumerable<Type> netMsgTypes = packetAssembly.GetTypes().Where((t) => t.IsClass == true && t.GetCustomAttribute<PacketMetaData>() != null && typeof(ServerBoundPacket).IsAssignableFrom(t));
 
 
             if (netMsgTypes.Count() == 0)
@@ -80,7 +80,7 @@ namespace TickableServices
             foreach (Type netMsgType in netMsgTypes)
             {
                 // checked above we know it works
-                var tag = netMsgType.GetCustomAttribute<NetMetaTag>()!;
+                var tag = netMsgType.GetCustomAttribute<PacketMetaData>()!;
 
                 if (!packetHandlers.ContainsKey(tag.State))
                     packetHandlers[tag.State] = new Dictionary<int, Type>();
@@ -193,14 +193,11 @@ namespace TickableServices
                     return; // stop receiving client is dead.
                 }
                 
-                //logger.Info($"packet received length: {args.BytesTransferred}");
-                
                 Span<byte> packet;
                 if (player.CipherEnabled)
                     packet = player.ReceiveCipher!.Decrypt(socketBuffer, 0, args.BytesTransferred);
                 else
-                    packet = socketBuffer;
-                // add another case here for out of bounds packet handling      
+                    packet = socketBuffer;     
 
                 try
                 {
@@ -236,7 +233,7 @@ namespace TickableServices
                 }
 
                 catch (SocketException) { }
-                catch (Exception e) { server.Logger.Exception(e); player.Connection.Close(); } // problemmatic exception of any kind disconnects.
+                catch (Exception e) { server.Logger.Exception(e); player.Connection.Close(); } // problematic exception of any kind disconnects.
 
 
             }
@@ -286,6 +283,7 @@ namespace TickableServices
                 packet = buffer.Buffer!;
             
             using MemoryStream stream = new MemoryStream(packet);
+            stream.Position = readBytes;
 
             int id = Leb128.ReadVarInt(stream);
 

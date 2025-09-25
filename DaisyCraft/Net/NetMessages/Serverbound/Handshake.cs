@@ -5,7 +5,7 @@ using NetMessages.Serverbound;
 
 namespace Net.NetMessages.Serverbound
 {
-    [NetMetaTag(GameState.Unknown, 0x00)]
+    [PacketMetaData(GameState.Unknown, 0x00)]
     public class Handshake : ServerBoundPacket
     {
         [NetVarType(NetVarTypeEnum.Varint, 0)]

@@ -1,9 +1,6 @@
-﻿using Net;
-using Net.NetMessages;
-
-namespace Net.NetMessages.Clientbound.Status
+﻿namespace Net.NetMessages.Clientbound.Status
 {
-    [NetMetaTag(GameState.Status, 0x01)]
+    [PacketMetaData(GameState.Status, 0x01)]
     public class PingResponse
     {
         [NetVarType(NetVarTypeEnum.Long, 0)]

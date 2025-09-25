@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Folder Include="World\" />
+    <Folder Include="Game\" />
   </ItemGroup>
 
 </Project>

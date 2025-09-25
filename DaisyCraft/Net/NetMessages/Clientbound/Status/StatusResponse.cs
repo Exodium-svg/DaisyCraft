@@ -3,7 +3,7 @@ using Net.NetMessages;
 
 namespace Net.NetMessages.Clientbound.Status
 {
-    [NetMetaTag(GameState.Status, 0x00)]
+    [PacketMetaData(GameState.Status, 0x00)]
     public class StatusResponse
     {
         [NetVarType(NetVarTypeEnum.String, 0)]

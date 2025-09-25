@@ -10,7 +10,7 @@ namespace Net.NetMessages.Clientbound.Login
         public byte[] Token { get; set; }
     }
 
-    [NetMetaTag(GameState.Login, 0x01)]
+    [PacketMetaData(GameState.Login, 0x01)]
     public class EncryptionRequest
     {
         [NetVarType(NetVarTypeEnum.String, 0)]
