@@ -8,11 +8,46 @@ using Utils;
 
 namespace Net
 {
+    public enum ChatMode : int
+    {
+        Enabled,
+        Commands,
+        Hidden,
+    }
+
+    public enum MainHand : int
+    {
+        Left,
+        Right,
+    }
+
+    public enum ParticleStatus : int
+    {
+        All,
+        Decreased,
+        Minimal,
+    }
+
+    [Flags]
+    public enum SkinMask : byte
+    {
+        None = 0x00,
+        Cape = 0x01,
+        Jacket = 0x02,
+        LeftSleeve = 0x04,
+        RightSleeve = 0x08,
+        LeftPants = 0x10,
+        RightPants = 0x20,
+        Hat = 0x40,
+        All = Cape | Jacket | LeftSleeve | RightSleeve | LeftPants | RightPants | Hat,
+    }
+
     public class Player
     {
         public Guid Uuid { get; set; } = Guid.Empty;
         public string Username { get; set; } = string.Empty;
-
+        public string Brand { get; set; } = string.Empty;
+        public string Locale { get; set; } = string.Empty;
         public ulong Id { get; set; } = 0;
         public GameState State { get; set; } = GameState.Unknown;
         public ulong LastPing { get; set; } = 0;
@@ -26,6 +61,12 @@ namespace Net
         public bool CipherEnabled { get; private set; } = false;
         public bool CompressionEnabled { get; private set; } = false;
         public int CompressionThreshold { get; private set; } = -1;
+
+        public byte ViewDistance { get; set; } = 8;
+        public MainHand DominantHand { get; set; } = MainHand.Left;
+        public ChatMode ChatMode { get; set; } = ChatMode.Enabled;
+        public SkinMask SkinMask { get; set; } = SkinMask.None;
+        public ParticleStatus ParticleStatus { get; set; } = ParticleStatus.All;
 
         public Player(Socket socket)
         {

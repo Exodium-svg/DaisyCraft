@@ -11,6 +11,7 @@
         String,
         UUID,
         ByteArray,
+        Identifier,
     }
     public class NetVarType : Attribute
     {

@@ -1,5 +1,6 @@
 ﻿using NetMessages.Serverbound;
 using System.Reflection;
+using System.Text;
 using Utils;
 
 namespace Net.NetMessages
@@ -73,6 +74,14 @@ namespace Net.NetMessages
                     case NetVarTypeEnum.Bool:
                         ms.Write((bool)value! == true ? (byte)1 : (byte)0);
                         break;
+                    case NetVarTypeEnum.Identifier:
+                        Identifier identifier = (Identifier)value!;
+                        byte[] tagBytes = Encoding.UTF8.GetBytes(identifier.Tag);
+                        Leb128.WriteVarInt(ms, tagBytes.Length);
+                        ms.Write(tagBytes);
+                        Leb128.WriteVarInt(ms, identifier.Value.Length);
+                        ms.Write(identifier.Value);
+                        break;
                     default:
                         throw new NotImplementedException($"Serialization for {tag.VarType} is not implemented.");
                 }
@@ -140,6 +149,19 @@ namespace Net.NetMessages
                         break;
                     case NetVarTypeEnum.Long:
                         prop.SetValue(netMsg, stream.Read<long>());
+                        break;
+                    case NetVarTypeEnum.Bool:
+                        prop.SetValue(netMsg, stream.ReadByte() == 1);
+                        break;
+                    case NetVarTypeEnum.Identifier:
+                        int tagLen = Leb128.ReadVarInt(stream);
+                        string identifierTag = stream.ReadString(tagLen);
+                        int identifierLength = Leb128.ReadVarInt(stream);
+                        byte[] identifierData = new byte[identifierLength];
+                        stream.ReadExactly(identifierData);
+
+                        prop.SetValue(netMsg, new Identifier(identifierTag, identifierData));
+
                         break;
                     default:
                         throw new NotImplementedException($"Deserialization for {fieldTag.VarType} is not implemented.");
