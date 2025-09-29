@@ -1,5 +1,6 @@
 ﻿using DaisyCraft;
 using DaisyCraft.Utils;
+using Game.Registery;
 using Net;
 using Scheduling;
 using System.Buffers.Text;
@@ -13,6 +14,11 @@ internal class Program
     static void Main(string[] args)
     {
         Logger logger = new Logger(new Stream[] { Console.OpenStandardOutput() });
+
+        RegisteryLoader loader = new("Registery");
+
+        loader.Load(logger).Wait();
+
 
         Settings settings = new Settings();
         settings.StartAsync("Resource/settings.txt", logger).Wait();

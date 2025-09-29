@@ -1,4 +1,5 @@
-﻿using NetMessages.Serverbound;
+﻿using Nbt.Components;
+using NetMessages.Serverbound;
 using System.Reflection;
 using System.Text;
 using Utils;
@@ -82,6 +83,12 @@ namespace Net.NetMessages
                         Leb128.WriteVarInt(ms, identifier.Value.Length);
                         ms.Write(identifier.Value);
                         break;
+                    case NetVarTypeEnum.TextComponent:
+                        TextComponent component = (TextComponent)value!;
+                        
+                        component.WriteTo(ms);
+                        //File.WriteAllBytes("TextComponentNbt.bin", ms.ToArray());
+                        break;
                     default:
                         throw new NotImplementedException($"Serialization for {tag.VarType} is not implemented.");
                 }
@@ -128,8 +135,8 @@ namespace Net.NetMessages
                         prop.SetValue(netMsg, Leb128.ReadVarInt(stream));
                     break;
                     case NetVarTypeEnum.String:
-                        int length = Leb128.ReadVarInt(stream);
-                        prop.SetValue(netMsg, stream.ReadString(length));
+                        //int length = Leb128.ReadVarInt(stream);
+                        prop.SetValue(netMsg, stream.ReadString());
                         break;
                     case NetVarTypeEnum.ByteArray:
                         int byteLen = Leb128.ReadVarInt(stream);
@@ -154,8 +161,8 @@ namespace Net.NetMessages
                         prop.SetValue(netMsg, stream.ReadByte() == 1);
                         break;
                     case NetVarTypeEnum.Identifier:
-                        int tagLen = Leb128.ReadVarInt(stream);
-                        string identifierTag = stream.ReadString(tagLen);
+                        //int tagLen = Leb128.ReadVarInt(stream);
+                        string identifierTag = stream.ReadString();
                         int identifierLength = Leb128.ReadVarInt(stream);
                         byte[] identifierData = new byte[identifierLength];
                         stream.ReadExactly(identifierData);

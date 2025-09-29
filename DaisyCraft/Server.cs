@@ -31,7 +31,7 @@ namespace DaisyCraft
             Status.Description = options.GetVar("motd.status", "DaisyCraft server");
         }
         
-        public void OnPlayerLeave(ulong id)
+        public void OnPlayerLeave(int id)
         {
 
         }

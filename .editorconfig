@@ -1,0 +1,4 @@
+﻿[NetNbtBuilder.cs]
+
+# CA1805: We don't care about nullabililty here, as the compound tag is unused here
+dotnet_diagnostic.CA1805.severity = none

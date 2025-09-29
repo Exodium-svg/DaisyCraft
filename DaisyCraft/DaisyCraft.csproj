@@ -6,10 +6,11 @@
     <RootNamespace>MinecraftC_ServerApp</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
-    <Folder Include="Game\" />
+    <ProjectReference Include="..\Nbt\Nbt.csproj" />
   </ItemGroup>
 
 </Project>

@@ -4,10 +4,22 @@ using Net.NetMessages.Clientbound.Login;
 using Scheduling;
 using System.IO.Compression;
 using System.Net.Sockets;
+using Net.NetMessages.Clientbound.Configuration;
 using Utils;
 
 namespace Net
 {
+    public enum GameState : byte
+    {
+        Unknown,
+        Status,
+        Login,
+        Configuration,
+        // Yes these 2 fields are meant to be the same, Love mc protocol.
+        Play,
+        Transfer = 3,
+        Kicked = 5,
+    }
     public enum ChatMode : int
     {
         Enabled,
@@ -44,11 +56,12 @@ namespace Net
 
     public class Player
     {
+        public bool Authenticated { get; set; } = false;
         public Guid Uuid { get; set; } = Guid.Empty;
         public string Username { get; set; } = string.Empty;
         public string Brand { get; set; } = string.Empty;
         public string Locale { get; set; } = string.Empty;
-        public ulong Id { get; set; } = 0;
+        public int Id { get; set; } = 0;
         public GameState State { get; set; } = GameState.Unknown;
         public ulong LastPing { get; set; } = 0;
 
@@ -105,10 +118,16 @@ namespace Net
                 case GameState.Status:
                     break;
                 case GameState.Login:
-                    await SendAsync(new KickResponse(reason));
+                    await SendAsync(new NetMessages.Clientbound.Login.LoginKick(reason));
                     break;
+                case GameState.Configuration:
+                    await SendAsync(new NetMessages.Clientbound.Configuration.ConfigurationKick(reason));
+                    break;
+                case GameState.Kicked:
+                    return;
             }
 
+            State = GameState.Kicked;
             scheduler.ScheduleDelayed(disconnectDelay, () => { Connection.Close(); return 0; });
         }
 

@@ -12,6 +12,7 @@
         UUID,
         ByteArray,
         Identifier,
+        TextComponent,
     }
     public class NetVarType : Attribute
     {

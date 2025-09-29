@@ -45,9 +45,11 @@ namespace Net.NetMessages.Serverbound
             {
                 server.Logger.Warn($"Invalid session request from: {player.Username} {player.Connection.RemoteEndPoint}");
                 await player.Kick("Invalid session", server.GetService<Scheduler>());
-                server.GetService<Scheduler>().ScheduleDelayed(1000, () => { player.Connection.Close(); return 0; });
+                
                 return;
             }
+
+            player.Authenticated = true;
 
             await player.SetCompression(server.Options.GetVar<int>("net.compression.threshold", 127));
             await player.SendAsync(new LoginSuccess(player.Uuid, player.Username));

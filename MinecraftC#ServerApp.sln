@@ -5,6 +5,10 @@ VisualStudioVersion = 17.14.36408.4
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DaisyCraft", "DaisyCraft\DaisyCraft.csproj", "{B7BE4605-BC36-4300-93C7-01FAA55F1B2E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nbt", "Nbt\Nbt.csproj", "{86DE3277-BB2E-498D-AC9A-B2F887142802}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +19,10 @@ Global
 		{B7BE4605-BC36-4300-93C7-01FAA55F1B2E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B7BE4605-BC36-4300-93C7-01FAA55F1B2E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B7BE4605-BC36-4300-93C7-01FAA55F1B2E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{86DE3277-BB2E-498D-AC9A-B2F887142802}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{86DE3277-BB2E-498D-AC9A-B2F887142802}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{86DE3277-BB2E-498D-AC9A-B2F887142802}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{86DE3277-BB2E-498D-AC9A-B2F887142802}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -2,7 +2,7 @@
 
 namespace Net
 {
-    public struct Identifier
+    public readonly struct Identifier
     {
         public string Tag { get; init; }
         public byte[] Value { get; init; }

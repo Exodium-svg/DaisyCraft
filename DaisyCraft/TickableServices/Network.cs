@@ -185,6 +185,7 @@ namespace TickableServices
 
                 if (args.SocketError != SocketError.Success || args.BytesTransferred <= 0)
                 {
+                    return;
                     if (player.Connected)
                         _ = player.Kick("Socket error", server.GetService<Scheduler>(), 1000);
                     else
@@ -315,6 +316,9 @@ namespace TickableServices
                 if (!readBuffer.TryDequeue(out NetBuffer? buffer))
                     continue;
 
+                if (buffer.Owner.State == GameState.Kicked || !buffer.Owner.Connected)
+                    continue;
+
                 try
                 {
                     if (buffer.Compressed)
@@ -327,6 +331,7 @@ namespace TickableServices
                 }
             }
 
+            //TODO handle all exceptions here so we do not crash.
             Task waitTask = Task.WhenAll(tasksToComplete);
 
             lock (players)
