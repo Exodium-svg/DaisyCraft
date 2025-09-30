@@ -3,7 +3,7 @@ using System.Numerics;
 
 namespace Nbt.Tags
 {
-    public struct NbtList<T> : INbtTag, IEnumerable 
+    public struct NbtNumericList<T> : INbtTag, IEnumerable, IEnumerable<T>
         where T : INumber<T>
     {
         public TagType Type { get; init; }
@@ -13,7 +13,7 @@ namespace Nbt.Tags
 
         private List<T> buffer;
 
-        public NbtList(string key, int capacity = 0) {
+        public NbtNumericList(string key, int capacity = 0) {
 
             Type = typeof(T) switch
             {
@@ -30,8 +30,11 @@ namespace Nbt.Tags
                 buffer = new List<T>();
         }
 
+        public void AddRange(IEnumerable<T> values) => buffer.AddRange(values);
         public IEnumerator GetEnumerator() => ((IEnumerable)buffer).GetEnumerator();
 
+        IEnumerator<T> IEnumerable<T>.GetEnumerator() => buffer.GetEnumerator();
+        
         public T this[int index]
         {
             get => buffer[index];

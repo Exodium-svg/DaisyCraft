@@ -1,5 +1,4 @@
-﻿using Nbt.Serialization;
-using Nbt.Tags;
+﻿using Nbt.Tags;
 using System.Drawing;
 
 namespace Nbt.Components
@@ -30,8 +29,6 @@ namespace Nbt.Components
             nbtTags["translate"] = new NbtTag<string>("translate", key);
             nbtTags["fallback"] = new NbtTag<string>("fallback", fallback);
         }
-
-        public void WriteTo(Stream stream) => new NetNbtBuilder(nbtTags).Build(stream);
         
     }
 }
