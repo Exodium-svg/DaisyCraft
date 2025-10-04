@@ -92,7 +92,7 @@ public class NbtWriter : IDisposable
         WriteValue(tag);
     }
 
-    public void WriteValue(INbtTag tag)
+    private void WriteValue(INbtTag tag)
     {
         switch (tag.Type)
         {

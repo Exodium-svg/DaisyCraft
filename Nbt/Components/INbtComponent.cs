@@ -19,12 +19,13 @@ namespace Nbt.Components
         LongArray,
         IntArray,
     }
-    public class NbtComponentType : Attribute
+    [AttributeUsage(AttributeTargets.Property)]
+    public sealed class NbtComponentTypeAttribute : Attribute
     {
         public string Key { get; init; }
         public ComponentType Type { get; init; }
 
-        public NbtComponentType(string key, ComponentType type)
+        public NbtComponentTypeAttribute(string key, ComponentType type)
         {
             Key = key;
             Type = type;

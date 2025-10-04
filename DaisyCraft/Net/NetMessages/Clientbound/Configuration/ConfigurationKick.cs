@@ -20,9 +20,11 @@ public class ConfigurationKick
         Underlined = true,
         StrikeThrough = true,
         Obfuscated = true,
+        Type = "text",
+        Text = reason
         };
 
-        textComponent.SetText(reason);
+        //textComponent.SetText(reason);
 
     }
 }

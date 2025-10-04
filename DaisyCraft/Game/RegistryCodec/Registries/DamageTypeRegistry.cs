@@ -26,15 +26,15 @@ namespace Game.RegistryCodec.Registries
 
         public void Write(NbtWriter writer)
         {
-            writer.WriteValue(new NbtString("message_id", MessageId));
-            writer.WriteValue(new NbtString("scaling", Scaling));
-            writer.WriteValue(new NbtFloat("exhaustion", Exhaustion));
+            writer.WriteTag(new NbtString("message_id", MessageId));
+            writer.WriteTag(new NbtString("scaling", Scaling));
+            writer.WriteTag(new NbtFloat("exhaustion", Exhaustion));
 
             if(null != Effects)
-                writer.WriteValue(new NbtString("effects", Effects));
+                writer.WriteTag(new NbtString("effects", Effects));
 
             if (null != DeathMessageType)
-                writer.WriteValue(new NbtString("death_message_type", DeathMessageType));
+                writer.WriteTag(new NbtString("death_message_type", DeathMessageType));
         }
     }
 }
