@@ -83,10 +83,12 @@ namespace Net.NetMessages
                         Leb128.WriteVarInt(ms, identifier.Value.Length);
                         ms.Write(identifier.Value);
                         break;
-                    case NetVarTypeEnum.TextComponent:
-                        TextComponent component = (TextComponent)value!;
-                        
-                        component.WriteTo(ms);
+                    case NetVarTypeEnum.NbtComponent:
+                        INbtComponent component = (INbtComponent)value!;
+
+                        using (NbtWriter writer = new NbtWriter(ms)) {
+                            component.Write(writer);
+                        }
                         //File.WriteAllBytes("TextComponentNbt.bin", ms.ToArray());
                         break;
                     default:

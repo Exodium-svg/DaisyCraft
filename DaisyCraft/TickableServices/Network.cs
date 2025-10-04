@@ -32,7 +32,7 @@ namespace TickableServices
     }
     public class Network : TickableService
     {
-        public const int PROTOCOL_VERSION = 772;
+        public const int PROTOCOL_VERSION = 773;
         const int MAX_PACKET_SIZE = 200000;
 
         List<Player> players = new List<Player>();

@@ -23,6 +23,5 @@
     {
         public TagType Type { get; init; }
         public string Key { get; init; }
-        public object? Value { get;}
     }
 }

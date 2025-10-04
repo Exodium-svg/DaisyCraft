@@ -7,19 +7,22 @@ namespace Net.NetMessages.Clientbound.Configuration;
 [PacketMetaData(GameState.Configuration, 0x02)]
 public class ConfigurationKick
 {
-    [NetVarType(NetVarTypeEnum.TextComponent, 0)]
+    [NetVarType(NetVarTypeEnum.NbtComponent, 0)]
     public TextComponent textComponent { get; init; }
 
     public ConfigurationKick(string reason)
     {
-        textComponent = new TextComponent();
+        textComponent = new TextComponent() { 
+        Bold = true,
+        TextColor = Color.Red,
+        ShadowColor = Color.Black,
+        Italic = true,
+        Underlined = true,
+        StrikeThrough = true,
+        Obfuscated = true,
+        };
+
         textComponent.SetText(reason);
-        textComponent.SetColor(Color.AliceBlue);
-        textComponent.SetShadow(Color.Red);
-        textComponent.SetBold(true);
-        textComponent.SetItalic(true);
-        textComponent.SetUnderlined(true);
-        textComponent.SetStrikeThrough(true);
-        textComponent.SetObfuscated(true);
+
     }
 }

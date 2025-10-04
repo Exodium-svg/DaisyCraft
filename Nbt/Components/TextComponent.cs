@@ -1,34 +1,56 @@
 ﻿using Nbt.Tags;
 using System.Drawing;
+using System.Text.Json.Serialization;
 
 namespace Nbt.Components
 {
-    public struct TextComponent
+    public partial struct TextComponent : INbtComponent
     {
-        Dictionary<string, INbtTag> nbtTags = new();
 
-        public TextComponent() { }
-
-        public void SetColor(Color color) => nbtTags["color"] = new NbtTag<string>("color", $"#{color.R:X2}{color.G:X2}{color.B:X2}");
-        public void SetShadow(Color color) => nbtTags["shadow_color"] = new NbtTag<int>("shadow_color", (color.A << 24) | (color.R << 16) | (color.G << 8) | color.B);
-        public void SetBold(bool isBold) => nbtTags["bold"] = new NbtTag<byte>("bold", isBold ? (byte)1 : (byte)0);
-        public void SetItalic(bool isItalic) => nbtTags["italic"] = new NbtTag<byte>("italic", isItalic ? (byte)1: (byte)0);
-        public void SetUnderlined(bool isUnderLined) => nbtTags["underlined"] = new NbtTag<byte>("underlined", isUnderLined ? (byte)1: (byte)0);
-        public void SetStrikeThrough(bool isStrikeThrough) => nbtTags["strikethrough"] = new NbtTag<byte>("strikethrough", isStrikeThrough ? (byte)1: (byte)0);
-        public void SetObfuscated(bool isObfuscated) => nbtTags["obfuscated"] = new NbtTag<byte>("obfuscated", isObfuscated ? (byte)1: (byte)0);
-
+        [JsonPropertyName("color")]
+        [NbtComponentType("color" ,ComponentType.HexColor)]
+        public Color? TextColor { get; set; }
+        [JsonPropertyName("shadow_color")]
+        [NbtComponentType("shadow_color", ComponentType.IntColor)]
+        public Color? ShadowColor { get; set; }
+        [JsonPropertyName("bold")]
+        [NbtComponentType("bold", ComponentType.Bool)]
+        public bool? Bold { get; set; }
+        [JsonPropertyName("italic")]
+        [NbtComponentType("italic", ComponentType.Bool)]
+        public bool? Italic { get; set; }
+        [JsonPropertyName("underlined")]
+        [NbtComponentType("underlined", ComponentType.Bool)]
+        public bool? Underlined { get; set; }
+        [JsonPropertyName("strikethrough")]
+        [NbtComponentType("strikethrough", ComponentType.Bool)]
+        public bool? StrikeThrough { get; set; }
+        [JsonPropertyName("obfuscated")]
+        [NbtComponentType("obfuscated", ComponentType.Bool)]
+        public bool? Obfuscated { get; set; }
+        [JsonPropertyName("type")]
+        [NbtComponentType("type", ComponentType.String)]
+        private string? Type { get; set; }
+        [JsonPropertyName("text")]
+        [NbtComponentType("text", ComponentType.String)]
+        private string Text { get; set; }
+        [JsonPropertyName("translate")]
+        [NbtComponentType("translate", ComponentType.String)]
+        private string? TranslationKey { get; set; }
+        [JsonPropertyName("fallback")]
+        [NbtComponentType("fallback", ComponentType.String)]
+        private string? Fallback { get; set; }
         public void SetText(string text)
         {
-            nbtTags["type"] = new NbtTag<string>("type", "text");
-            nbtTags["text"] = new NbtTag<string>("text", text);
+            Type = "text";
+            Text = text;
         }
 
         public void SetTranslation(string key, string fallback = "UNKNOWN_KEY")
         {
-            nbtTags["type"] = new NbtTag<string>("type", "translatable");
-            nbtTags["translate"] = new NbtTag<string>("translate", key);
-            nbtTags["fallback"] = new NbtTag<string>("fallback", fallback);
+            Type = "translatable";
+            TranslationKey = key;
+            Fallback = fallback;
         }
-        
     }
 }

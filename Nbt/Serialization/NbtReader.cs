@@ -47,33 +47,29 @@ namespace Nbt.Serialization
                     ReadCompound(ref tag);
                     return tag;
                 case TagType.ByteArray:
-                    NbtNumericList<byte> byteArray = new(key);
-                    byteArray.AddRange(ReadByteArray());
-                    return byteArray;
+                    return new NbtByteArray(key, ReadByteArray());
                 case TagType.IntArray:
-                    NbtNumericList<int> intArray = new(key);
-                    intArray.AddRange(ReadIntArray());
-                    return intArray;
+                    return new NbtIntArray(key, ReadIntArray());
                 case TagType.LongArray:
-                    NbtNumericList<long> longArray = new(key);
-                    longArray.AddRange(ReadLongArray());
-                    return longArray;
+                    return new NbtLongArray(key, ReadLongArray());
                 case TagType.List:
                     return ReadList(key);
                 case TagType.String:
-                    return new NbtTag<string>(key, ReadString());
+                    return new NbtString(key, ReadString());
                 case TagType.Byte:
-                    return new NbtTag<byte>(key, (byte)stream.ReadByte());
+                    return new NbtByte(key, (byte)stream.ReadByte());
                 case TagType.Short:
-                    return new NbtTag<short>(key, ReadShort());
+                    return new NbtShort(key, ReadShort());
                 case TagType.Int:
-                    return new NbtTag<int>(key, ReadInt());
+                    return new NbtInt(key, ReadInt());
                 case TagType.Long:
-                    return new NbtTag<long>(key, ReadLong());
+                    return new NbtLong(key, ReadLong());
                 case TagType.Float:
-                    return new NbtTag<float>(key, ReadFloat());
+                    return new NbtFloat(key, ReadFloat());
                 case TagType.Double:
-                    return new NbtTag<double>(key, ReadDouble());
+                    return new NbtDouble(key, ReadDouble());
+                case TagType.End:
+                    return new NbtEndTag();
                 default:
                     throw new NotSupportedException($"Tag ({key}) of type {type} is unsupported!");
             }
@@ -84,12 +80,12 @@ namespace Nbt.Serialization
             TagType elementType = ReadTag();
             int count = ReadInt();
 
-            NbtGenericList nbtList = new(key, elementType, count);
+            INbtTag[] nbtArray = new INbtTag[count];
 
-            for(int i = 0; i < count; i++)
-                nbtList.Add(ReadTag(elementType, string.Empty));
+            for (int i = 0; i < count; i++)
+                nbtArray[i] = (ReadTag(elementType, string.Empty));
 
-            return nbtList;
+            return new NbtList(key, elementType, nbtArray);
         }
         private byte[] ReadByteArray()
         {

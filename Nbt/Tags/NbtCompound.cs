@@ -4,16 +4,59 @@
     {
         public TagType Type { get; init; } = TagType.Compound;
         public string Key { get; init; }
-        private Dictionary<string, INbtTag> Tags { get; init; } = new();
 
-        public object? Value => Tags;
+        public readonly List<INbtTag> tags;
 
-        public NbtCompound(string key) => Key = key;
+        public NbtCompound(string key)
+        {
+            Key = key;
+            tags = new List<INbtTag>();
+        }
+
+        public bool ContainsKey(string key)
+        {
+            foreach (var tag in tags)
+                if (tag.Key == key)
+                    return true;
+            return false;
+        }
+
+        public bool TryGetValue(string key, out INbtTag? tag)
+        {
+            foreach (var candidate in tags)
+                if (candidate.Key == key)
+                {
+                    tag = candidate;
+                    return true;
+                }
+
+            tag = null;
+            return false;
+        }
 
         public INbtTag this[string key]
         {
-            get => Tags[key];
-            set => Tags[key] = value;
+            get
+            {
+                foreach (var tag in tags)
+                    if (tag.Key == key)
+                        return tag;
+
+                throw new KeyNotFoundException($"Tag with key '{key}' not found in compound '{Key}'.");
+            }
+            set
+            {
+                for (int i = 0; i < tags.Count; i++)
+                {
+                    if (tags[i].Key == key)
+                    {
+                        tags[i] = value;
+                        return;
+                    }
+                }
+
+                tags.Add(value);
+            }
         }
     }
 }

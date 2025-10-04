@@ -20,7 +20,7 @@ namespace Net
         public string? Icon { get; set; } = "data:image/png;base64,";
         public ServerStatus(int version, bool enforcesSecureChat, string description, int maxPlayers, int onlinePlayers)
         {
-            Version = new VersionInfo { Name = "1.21.8", Protocol = version };
+            Version = new VersionInfo { Name = "1.21.9", Protocol = version };
             EnforcesSecureChat = enforcesSecureChat;
             Description = description;
             Players = new PlayersInfo { Max = maxPlayers, Online = onlinePlayers };

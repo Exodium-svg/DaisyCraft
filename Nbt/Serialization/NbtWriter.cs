@@ -13,6 +13,8 @@ public class NbtWriter : IDisposable
 
         if(isNetwork)
             WriteType(TagType.NetCompound);
+
+
     }
 
     private void WriteType(TagType type) => _stream.WriteByte((byte)type);
@@ -92,46 +94,43 @@ public class NbtWriter : IDisposable
 
     public void WriteValue(INbtTag tag)
     {
-        if (tag.Value == null)
-            return;
-
         switch (tag.Type)
         {
             case TagType.Byte:
-                WriteByte((byte)tag.Value);
+                WriteByte((NbtByte)tag);
                 break;
             case TagType.Short:
-                WriteShort((short)tag.Value);
+                WriteShort((NbtShort)tag);
                 break;
             case TagType.Int:
-                WriteInt((int)tag.Value);
+                WriteInt((NbtInt)tag);
                 break;
             case TagType.Long:
-                WriteLong((long)tag.Value);
+                WriteLong((NbtLong)tag);
                 break;
             case TagType.Float:
-                WriteFloat((float)tag.Value);
+                WriteFloat((NbtFloat)tag);
                 break;
             case TagType.Double:
-                WriteDouble((double)tag.Value);
+                WriteDouble((NbtDouble)tag);
                 break;
             case TagType.ByteArray:
-                WriteByteArray((byte[])tag.Value);
+                WriteByteArray((NbtByteArray)tag);
                 break;
             case TagType.String:
-                WriteString((string)tag.Value);
+                WriteString((NbtString)tag);
                 break;
             case TagType.List:
-                WriteList((IEnumerable<INbtTag>)tag.Value);
+                WriteList((IEnumerable<INbtTag>)tag);
                 break;
             case TagType.Compound:
-                WriteCompound((IEnumerable<INbtTag>)tag.Value);
+                WriteCompound((IEnumerable<INbtTag>)tag);
                 break;
             case TagType.IntArray:
-                WriteIntArray((int[])tag.Value);
+                WriteIntArray((NbtIntArray)tag);
                 break;
             case TagType.LongArray:
-                WriteLongArray((long[])tag.Value);
+                WriteLongArray((NbtLongArray)tag);
                 break;
             default:
                 throw new ArgumentException($"Unsupported tag type: {tag.Type}");

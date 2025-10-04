@@ -15,7 +15,7 @@ internal class Program
     {
         Logger logger = new Logger(new Stream[] { Console.OpenStandardOutput() });
 
-        RegisteryLoader loader = new("Registery");
+        CodecLoader loader = new("Registry");
 
         loader.Load(logger).Wait();
 
@@ -26,7 +26,7 @@ internal class Program
         Server server = new Server(logger, settings);
 
         const string ICON_PATH = "Resource/server-icon.png";
-        if ( File.Exists(ICON_PATH))
+        if ( File.Exists(ICON_PATH) )
         {
             byte[] pngData = File.ReadAllBytes(ICON_PATH);
 
@@ -36,8 +36,8 @@ internal class Program
         }
 
         IEnumerable<string>? bannedIps = null;
-
         const string BANNED_IPS_PATH = "Resource/banned-ips.txt";
+
         if (File.Exists(BANNED_IPS_PATH))
         {
             bannedIps = File.ReadAllLines(BANNED_IPS_PATH).Where(line => !string.IsNullOrWhiteSpace(line) && !line.StartsWith("#")).Select(line => line.Trim());
