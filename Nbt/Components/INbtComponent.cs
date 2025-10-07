@@ -18,6 +18,9 @@ namespace Nbt.Components
         NbtArray,
         LongArray,
         IntArray,
+        ByteArray,
+        NbtComponent,
+        Compound,
     }
     [AttributeUsage(AttributeTargets.Property)]
     public sealed class NbtComponentTypeAttribute : Attribute
@@ -35,5 +38,6 @@ namespace Nbt.Components
     {
         public void Write(NbtWriter writer);
         public void Read(ref readonly NbtCompound compoundTag);
+        public NbtCompound ToCompound(string? key);
     }
 }

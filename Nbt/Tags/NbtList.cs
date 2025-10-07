@@ -6,7 +6,14 @@
         public TagType ElementType { get; init; }
         public string Key { get; init; }
         public INbtTag[] Value { get; set; }
-        public NbtList(string key, TagType elementType, INbtTag[] value)
+        public NbtList(string key, TagType elementType, IEnumerable<INbtTag> value)
+        {
+            ElementType = elementType;
+            Key = key;
+            Value = value.ToArray();
+        }
+
+        public NbtList(string key, TagType elementType, params INbtTag[] value)
         {
             ElementType = elementType;
             Key = key;

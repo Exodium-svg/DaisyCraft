@@ -31,36 +31,70 @@ namespace Nbt.SourceGen
                 {
                     if (symbol is not null)
                     {
-                        var source = GenerateNbtComponentImplementation(symbol);
+                        var source = GenerateNbtComponentImplementation(symbol, spc);
+
                         spc.AddSource($"{symbol.Name}_NbtComponent.g.cs", source);
                     }
                 }
             });
         }
+        private static void Log(SourceProductionContext context, string message)
+        {
+            var descriptor = new DiagnosticDescriptor(
+                id: "NBTGEN001",
+                title: "Nbt SourceGen Log",
+                messageFormat: "{0}",
+                category: "NbtSourceGen",
+                DiagnosticSeverity.Info,
+                isEnabledByDefault: true);
 
+            context.ReportDiagnostic(Diagnostic.Create(descriptor, Location.None, message));
+        }
         private static bool ImplementsINbtComponent(INamedTypeSymbol? symbol)
         {
             if (symbol == null) return false;
             return symbol.AllInterfaces.Any(i => i.Name == "INbtComponent");
         }
 
-        private static string GenerateNbtComponentImplementation(INamedTypeSymbol typeSymbol)
+        private static (bool isStruct, bool isNullableStruct, bool isReferenceType)
+    AnalyzeNullability(IPropertySymbol property)
+        {
+            var type = property.Type;
+
+            if (type.IsValueType)
+            {
+                // Nullable<T> is a special value type
+                if (type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
+                    return (isStruct: true, isNullableStruct: true, isReferenceType: false);
+                return (isStruct: true, isNullableStruct: false, isReferenceType: false);
+            }
+
+            // Reference types (classes/interfaces)
+            return (isStruct: false, isNullableStruct: false, isReferenceType: true);
+        }
+
+
+        private static string GenerateNbtComponentImplementation(INamedTypeSymbol typeSymbol, SourceProductionContext context)
         {
             var ns = typeSymbol.ContainingNamespace.ToDisplayString();
             var typeKind = typeSymbol.TypeKind == TypeKind.Struct ? "struct" : "class";
             var typeName = typeSymbol.Name;
 
-            
             var properties = typeSymbol.GetMembers()
                 .OfType<IPropertySymbol>()
                 .Where(p => p.GetAttributes().Any(a => a.AttributeClass?.Name == "NbtComponentTypeAttribute"))
                 .ToList();
 
-            var writeMethod = GenerateWriteMethod(properties);
-            //var readMethod = GenerateReadMethod(properties);
-            var readMethod = string.Empty;//GenerateReadMethod(properties);
+            //if(!Debugger.IsAttached)
+            //    Debugger.Launch();
 
-            return $@"
+            //Debugger.Break();
+            Log(context, $"Generating NbtComponent implementation for {typeName} with {properties.Count} properties.");
+            var writeMethod = GenerateWriteMethod(properties);
+            var readMethod = GenerateReadMethod(properties);
+            var toCompoundMethod = GenerateToCompoundMethod(properties);
+
+                return $@"
 using Nbt.Tags;
 
 namespace {ns}
@@ -76,15 +110,20 @@ namespace {ns}
         {{
 {readMethod}
         }}
+
+        public NbtCompound ToCompound(string? key = null)
+        {{
+{toCompoundMethod}
+        }}
     }}
 }}
 ";
         }
 
-        
         private static string GenerateWriteMethod(List<IPropertySymbol> properties)
         {
             var sb = new StringBuilder();
+
             foreach (var property in properties)
             {
                 var attr = property.GetAttributes().First(a => a.AttributeClass?.Name == "NbtComponentTypeAttribute");
@@ -97,60 +136,106 @@ namespace {ns}
                         .Name
                     : null;
 
-                // Check if the property is nullable
-                bool isNullable = property.Type.NullableAnnotation == NullableAnnotation.Annotated;
+                // Determine struct vs. nullable struct vs. class
+                var (isStruct, isNullableStruct, isReferenceType) = AnalyzeNullability(property);
+                string access = isNullableStruct ? ".Value" : "";
+                bool needsCheck = isNullableStruct || isReferenceType;
 
+                // Helper to conditionally wrap code in null/HasValue check
+                void EmitChecked(string codeBlock)
+                {
+                    if (needsCheck)
+                    {
+                        string check = isNullableStruct ? $"{property.Name}.HasValue" : $"{property.Name} != null";
+                        sb.AppendLine($"            if ({check})");
+                        sb.AppendLine($"            {{");
+                        sb.AppendLine(codeBlock);
+                        sb.AppendLine($"            }}");
+                    }
+                    else
+                    {
+                        sb.AppendLine(codeBlock);
+                    }
+                }
+
+                // Now generate the serialization logic for the type
                 switch (componentType)
                 {
                     case "IntColor":
-                        if (isNullable)
-                        {
-                            sb.AppendLine($"            if ({property.Name}.HasValue)");
-                            sb.AppendLine($"                writer.WriteTag(new NbtInt(\"{key}\", ({property.Name}.Value.A << 24 | {property.Name}.Value.R << 16 | {property.Name}.Value.G << 8 | {property.Name}.Value.B)));");
-                        }
-                        else
-                        {
-                            sb.AppendLine($"            writer.WriteTag(new NbtInt(\"{key}\", ({property.Name}.A << 24 | {property.Name}.R << 16 | {property.Name}.G << 8 | {property.Name}.B)));");
-                        }
+                        EmitChecked($"writer.WriteTag(new NbtInt(\"{key}\", ({property.Name}{access}.A << 24 | {property.Name}{access}.R << 16 | {property.Name}{access}.G << 8 | {property.Name}{access}.B)));");
                         break;
 
                     case "HexColor":
-                        if (isNullable)
-                        {
-                            sb.AppendLine($"            if ({property.Name}.HasValue)");
-                            sb.AppendLine($"                writer.WriteTag(new NbtString(\"{key}\", $\"#{{{property.Name}.Value.R:X2}}{{{property.Name}.Value.G:X2}}{{{property.Name}.Value.B:X2}}\"));");
-                        }
-                        else
-                        {
-                            sb.AppendLine($"            writer.WriteTag(new NbtString(\"{key}\", $\"#{{{property.Name}.R:X2}}{{{property.Name}.G:X2}}{{{property.Name}.B:X2}}\"));");
-                        }
+                        EmitChecked($"writer.WriteTag(new NbtString(\"{key}\", $\"#{{{property.Name}{access}.R:X2}}{{{property.Name}{access}.G:X2}}{{{property.Name}{access}.B:X2}}\"));");
                         break;
 
                     case "Bool":
-                        if (isNullable)
-                        {
-                            sb.AppendLine($"            if ({property.Name}.HasValue)");
-                            sb.AppendLine($"                writer.WriteTag(new NbtByte(\"{key}\", (byte)({property.Name}.Value ? 1 : 0)));");
-                        }
-                        else
-                        {
-                            sb.AppendLine($"            writer.WriteTag(new NbtByte(\"{key}\", (byte)({property.Name} ? 1 : 0)));");
-                        }
+                        EmitChecked($"writer.WriteTag(new NbtByte(\"{key}\", (byte)({property.Name}{access} ? 1 : 0)));");
+                        break;
+
+                    case "Byte":
+                        EmitChecked($"writer.WriteTag(new NbtByte(\"{key}\", {property.Name}{access}));");
+                        break;
+
+                    case "Short":
+                        EmitChecked($"writer.WriteTag(new NbtShort(\"{key}\", {property.Name}{access}));");
+                        break;
+
+                    case "Int":
+                        EmitChecked($"writer.WriteTag(new NbtInt(\"{key}\", {property.Name}{access}));");
+                        break;
+
+                    case "Long":
+                        EmitChecked($"writer.WriteTag(new NbtLong(\"{key}\", {property.Name}{access}));");
+                        break;
+
+                    case "Float":
+                        EmitChecked($"writer.WriteTag(new NbtFloat(\"{key}\", {property.Name}{access}));");
+                        break;
+
+                    case "Double":
+                        EmitChecked($"writer.WriteTag(new NbtDouble(\"{key}\", {property.Name}{access}));");
                         break;
 
                     case "String":
-                        sb.AppendLine($"            if ({property.Name} != null)");
-                        sb.AppendLine($"                writer.WriteTag(new NbtString(\"{key}\", {property.Name}));");
+                        EmitChecked($"writer.WriteTag(new NbtString(\"{key}\", {property.Name}));");
+                        break;
+
+                    case "ByteArray":
+                        EmitChecked($"writer.WriteTag(new NbtByteArray(\"{key}\", {property.Name}));");
+                        break;
+
+                    case "IntArray":
+                        EmitChecked($"writer.WriteTag(new NbtIntArray(\"{key}\", {property.Name}));");
+                        break;
+
+                    case "LongArray":
+                        EmitChecked($"writer.WriteTag(new NbtLongArray(\"{key}\", {property.Name}));");
+                        break;
+
+                    case "NbtArray":
+                        EmitChecked($$"""
+
+                var length = {{property.Name}}?.Length ?? 0;
+                var compoundArray = new INbtTag[length];
+                for (int i = 0; i < length; i++)
+                    compoundArray[i] = {{property.Name}}[i].ToCompound();
+                writer.WriteTag(new NbtList("{{key}}", TagType.Compound, compoundArray));
+            
+""");
+                        break;
+
+                    case "NbtComponent":
+                        EmitChecked($"writer.WriteTag({property.Name}.ToCompound(\"{key}\"));");
                         break;
 
                     default:
                         sb.AppendLine($"            // Unsupported type: {componentType}");
-                        sb.AppendLine($"            throw new NotImplementedException(\"Serialization for {componentType} is not implemented.\");");
+                        sb.AppendLine($"            throw new System.NotImplementedException(\"Serialization for {componentType} is not implemented.\");");
                         break;
                 }
             }
 
-            
             return sb.ToString();
         }
 
@@ -159,33 +244,263 @@ namespace {ns}
             var sb = new StringBuilder();
             foreach (var property in properties)
             {
+                var elementType = property.Type is IArrayTypeSymbol arrayType
+    ? arrayType.ElementType
+    : property.Type;
                 var attr = property.GetAttributes().First(a => a.AttributeClass?.Name == "NbtComponentTypeAttribute");
                 var key = attr.ConstructorArguments[0].Value?.ToString() ?? property.Name;
-                var componentType = attr.ConstructorArguments[1].Value?.ToString();
+                var enumConstant = attr.ConstructorArguments[1];
+                var componentType = enumConstant.Kind == TypedConstantKind.Enum
+                    ? enumConstant.Type?.GetMembers()
+                        .OfType<IFieldSymbol>()
+                        .FirstOrDefault(f => f.HasConstantValue && f.ConstantValue?.Equals(enumConstant.Value) == true)?
+                        .Name
+                    : null;
 
+                bool isNullable = property.Type.NullableAnnotation == NullableAnnotation.Annotated;
                 var localName = property.Name.ToLowerInvariant();
+                var valueName = $"{localName}Value";
 
+                sb.AppendLine($"            if (tag.TryGetValue(\"{key}\", out var {localName}Tag))");
+                sb.AppendLine($"            {{");
                 switch (componentType)
                 {
-                    case "HexColor":
                     case "IntColor":
-                        sb.AppendLine($"            if (tag.TryGetValue(\"{key}\", out var {localName}Tag) && {localName}Tag is NbtInt {localName}Value)");
-                        sb.AppendLine($"                {property.Name} = System.Drawing.Color.FromArgb({localName}Value.Value);");
+                        sb.AppendLine($"                if ({localName}Tag is NbtInt {valueName})");
+                        sb.AppendLine($"                {{");
+                        sb.AppendLine($"                    int argb = {valueName}.Value;");
+                        sb.AppendLine($"                    var color = System.Drawing.Color.FromArgb((argb >> 24) & 0xFF, (argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF);");
+                        sb.AppendLine($"                    {property.Name} = color;");
+                        sb.AppendLine($"                }}");
+                        break;
+                    case "HexColor":
+                        sb.AppendLine($"                if ({localName}Tag is NbtString {valueName})");
+                        sb.AppendLine($"                {{");
+                        sb.AppendLine($"                    string hex = {valueName}.Value;");
+                        sb.AppendLine($"                    if (hex.Length == 7 && hex[0] == '#' &&");
+                        sb.AppendLine($"                        int.TryParse(hex.Substring(1, 2), System.Globalization.NumberStyles.HexNumber, null, out int r) &&");
+                        sb.AppendLine($"                        int.TryParse(hex.Substring(3, 2), System.Globalization.NumberStyles.HexNumber, null, out int g) &&");
+                        sb.AppendLine($"                        int.TryParse(hex.Substring(5, 2), System.Globalization.NumberStyles.HexNumber, null, out int b))");
+                        sb.AppendLine($"                    {{");
+                        sb.AppendLine($"                        var color = System.Drawing.Color.FromArgb(r, g, b);");
+                        sb.AppendLine($"                        {property.Name} = color;");
+                        sb.AppendLine($"                    }}");
+                        sb.AppendLine($"                }}");
                         break;
                     case "Bool":
-                        sb.AppendLine($"            if (tag.TryGetValue(\"{key}\", out var {localName}Tag) && {localName}Tag is NbtByte {localName}Value)");
-                        sb.AppendLine($"                {property.Name} = {localName}Value.Value != 0;");
+                        sb.AppendLine($"                if ({localName}Tag is NbtByte {valueName})");
+                        sb.AppendLine($"                {{");
+                        sb.AppendLine($"                    {property.Name} = {valueName}.Value != 0;");
+                        sb.AppendLine($"                }}");
+                        break;
+                    case "Byte":
+                        sb.AppendLine($"                if ({localName}Tag is NbtByte {valueName})");
+                        sb.AppendLine($"                {{");
+                        sb.AppendLine($"                    {property.Name} = {valueName}.Value;");
+                        sb.AppendLine($"                }}");
+                        break;
+                    case "Short":
+                        sb.AppendLine($"                if ({localName}Tag is NbtShort {valueName})");
+                        sb.AppendLine($"                {{");
+                        sb.AppendLine($"                    {property.Name} = {valueName}.Value;");
+                        sb.AppendLine($"                }}");
+                        break;
+                    case "Int":
+                        sb.AppendLine($"                if ({localName}Tag is NbtInt {valueName})");
+                        sb.AppendLine($"                {{");
+                        sb.AppendLine($"                    {property.Name} = {valueName}.Value;");
+                        sb.AppendLine($"                }}");
+                        break;
+                    case "Long":
+                        sb.AppendLine($"                if ({localName}Tag is NbtLong {valueName})");
+                        sb.AppendLine($"                {{");
+                        sb.AppendLine($"                    {property.Name} = {valueName}.Value;");
+                        sb.AppendLine($"                }}");
+                        break;
+                    case "Float":
+                        sb.AppendLine($"                if ({localName}Tag is NbtFloat {valueName})");
+                        sb.AppendLine($"                {{");
+                        sb.AppendLine($"                    {property.Name} = {valueName}.Value;");
+                        sb.AppendLine($"                }}");
+                        break;
+                    case "Double":
+                        sb.AppendLine($"                if ({localName}Tag is NbtDouble {valueName})");
+                        sb.AppendLine($"                {{");
+                        sb.AppendLine($"                    {property.Name} = {valueName}.Value;");
+                        sb.AppendLine($"                }}");
                         break;
                     case "String":
-                        sb.AppendLine($"            if (tag.TryGetValue(\"{key}\", out var {localName}Tag) && {localName}Tag is NbtString {localName}Value)");
-                        sb.AppendLine($"                {property.Name} = {localName}Value.Value;");
+                        sb.AppendLine($"                if ({localName}Tag is NbtString {valueName})");
+                        sb.AppendLine($"                {{");
+                        sb.AppendLine($"                    {property.Name} = {valueName}.Value;");
+                        sb.AppendLine($"                }}");
+                        break;
+                    case "ByteArray":
+                        sb.AppendLine($"                if ({localName}Tag is NbtByteArray {valueName})");
+                        sb.AppendLine($"                {{");
+                        sb.AppendLine($"                    {property.Name} = {valueName}.Value;");
+                        sb.AppendLine($"                }}");
+                        break;
+                    case "IntArray":
+                        sb.AppendLine($"                if ({localName}Tag is NbtIntArray {valueName})");
+                        sb.AppendLine($"                {{");
+                        sb.AppendLine($"                    {property.Name} = {valueName}.Value;");
+                        sb.AppendLine($"                }}");
+                        break;
+                    case "LongArray":
+                        sb.AppendLine($"                if ({localName}Tag is NbtLongArray {valueName})");
+                        sb.AppendLine($"                {{");
+                        sb.AppendLine($"                    {property.Name} = {valueName}.Value;");
+                        sb.AppendLine($"                }}");
+                        break;
+                    case "NbtArray":
+                        sb.AppendLine($"                if ({localName}Tag is NbtList {valueName})");
+                        sb.AppendLine($"                {{");
+                        sb.AppendLine($"                    var length = {valueName}.Value.Length;");
+                        sb.AppendLine($"                    {property.Name} = new {elementType}[length];");
+                        sb.AppendLine($"                    for (int i = 0; i < length; i++) {{");
+                        sb.AppendLine($"                        var condition = new {elementType}();");
+                        sb.AppendLine($"                        NbtCompound compound = (NbtCompound){valueName}.Value[i];");
+                        sb.AppendLine($"                        condition.Read(ref compound);");
+                        sb.AppendLine($"                        {property.Name}[i] = condition;");
+                        sb.AppendLine($"                    }}");
+                        sb.AppendLine($"                }}");
+                        break;
+                    case "Compound":
+                        sb.AppendLine($"                if ({localName}Tag is NbtCompound {valueName})");
+                        sb.AppendLine($"                {{");
+                        sb.AppendLine($"                    {property.Name} = {valueName};");
+                        sb.AppendLine($"                }}");
+                        break;
+                    case "NbtComponent":
+                        //Debugger.Launch();
+                        sb.AppendLine($$"""
+                            {{property.Name}} = new {{property.Type}}();
+                            var localCompound = (NbtCompound){{localName}}Tag;
+                            {{property.Name}}.Read(ref localCompound);
+                            """);
                         break;
                     default:
-                        sb.AppendLine($"            // Unsupported type: {componentType}");
-                        sb.AppendLine($"            throw new NotImplementedException(\"Deserialization for {componentType} is not implemented.\");");
+                        sb.AppendLine($"                // Unsupported type: {componentType}");
+                        sb.AppendLine($"                throw new System.NotImplementedException(\"Deserialization for {componentType} is not implemented.\");");
+                        break;
+                }
+                sb.AppendLine($"            }}");
+                if (isNullable)
+                {
+                    sb.AppendLine($"            else");
+                    sb.AppendLine($"            {{");
+                    sb.AppendLine($"                {property.Name} = null;");
+                    sb.AppendLine($"            }}");
+                }
+                sb.AppendLine();
+
+                
+            }
+            
+            //if(!Debugger.IsAttached)
+            //    Debugger.Launch();
+            //Debugger.Break();
+            return sb.ToString();
+        }
+
+        private static string GenerateToCompoundMethod(List<IPropertySymbol> properties)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine($"            var compound = new NbtCompound(key ?? string.Empty);");
+            foreach (var property in properties)
+            {
+                var attr = property.GetAttributes().First(a => a.AttributeClass?.Name == "NbtComponentTypeAttribute");
+                var key = attr.ConstructorArguments[0].Value?.ToString() ?? property.Name;
+                var enumConstant = attr.ConstructorArguments[1];
+                var componentType = enumConstant.Kind == TypedConstantKind.Enum
+                    ? enumConstant.Type?.GetMembers()
+                        .OfType<IFieldSymbol>()
+                        .FirstOrDefault(f => f.HasConstantValue && f.ConstantValue?.Equals(enumConstant.Value) == true)?
+                        .Name
+                    : null;
+
+                bool isNullable = property.Type.NullableAnnotation == NullableAnnotation.Annotated;
+                var (isStruct, isNullableStruct, isReferenceType) = AnalyzeNullability(property);
+                string access = isNullableStruct ? ".Value" : "";
+                bool needsCheck = isNullableStruct || isReferenceType;
+
+                void EmitChecked(string codeBlock)
+                {
+                    if (needsCheck)
+                    {
+                        string check = isNullableStruct ? $"{property.Name}.HasValue" : $"{property.Name} != null";
+                        sb.AppendLine($"            if ({check})");
+                        sb.AppendLine($"            {{");
+                        sb.AppendLine(codeBlock);
+                        sb.AppendLine($"            }}");
+                    }
+                    else
+                    {
+                        sb.AppendLine(codeBlock);
+                    }
+                }
+                
+                switch (componentType)
+                {
+                    case "IntColor":
+                        EmitChecked($"compound[\"{key}\"] = new NbtInt(\"{key}\", ({property.Name}{(isNullable ? ".Value" : "")}.A << 24 | {property.Name}{(isNullable ? ".Value" : "")}.R << 16 | {property.Name}{(isNullable ? ".Value" : "")}.G << 8 | {property.Name}{(isNullable ? ".Value" : "")}.B));");
+                        break;
+                    case "HexColor":
+                        EmitChecked($"compound[\"{key}\"] = new NbtString(\"{key}\", $\"#{{{property.Name}{(isNullable ? ".Value" : "")}.R:X2}}{{{property.Name}{(isNullable ? ".Value" : "")}.G:X2}}{{{property.Name}{(isNullable ? ".Value" : "")}.B:X2}}\");");
+                        break;
+                    case "Bool":
+                        EmitChecked($"compound[\"{key}\"] = new NbtByte(\"{key}\", (byte)({property.Name}{(isNullable ? ".Value" : "")} ? 1 : 0));");
+                        break;
+                    case "Byte":
+                        EmitChecked($"compound[\"{key}\"] = new NbtByte(\"{key}\", {property.Name}{(isNullable ? ".Value" : "")});");
+                        break;
+                    case "Short":
+                        EmitChecked($"compound[\"{key}\"] = new NbtShort(\"{key}\", {property.Name}{(isNullable ? ".Value" : "")});");
+                        break;
+                    case "Int":
+                        EmitChecked($"compound[\"{key}\"] = new NbtInt(\"{key}\", {property.Name}{(isNullable ? ".Value" : "")});");
+                        break;
+                    case "Long":
+                        EmitChecked($"compound[\"{key}\"] = new NbtLong(\"{key}\", {property.Name}{(isNullable ? ".Value" : "")});");
+                        break;
+                    case "Float":
+                        EmitChecked($"compound[\"{key}\"] = new NbtFloat(\"{key}\", {property.Name}{(isNullable ? ".Value" : "")});");
+                        break;
+                    case "Double":
+                        EmitChecked($"compound[\"{key}\"] = new NbtDouble(\"{key}\", {property.Name}{(isNullable ? ".Value" : "")});");
+                        break;
+                    case "String":
+                        EmitChecked($"compound[\"{key}\"] = new NbtString(\"{key}\", {property.Name});");
+                        break;
+                    case "ByteArray":
+                        EmitChecked($"compound[\"{key}\"] = new NbtByteArray(\"{key}\", {property.Name});");
+                        break;
+                    case "IntArray":
+                        EmitChecked($"compound[\"{key}\"] = new NbtIntArray(\"{key}\", {property.Name});");
+                        break;
+                    case "LongArray":
+                        EmitChecked($"compound[\"{key}\"] = new NbtLongArray(\"{key}\", {property.Name});");
+                        break;
+                    case "NbtArray":
+                        EmitChecked($$"""
+            var length = {{property.Name}}?.Length ?? 0;
+            var compoundArray = new INbtTag[length];
+            for (int i = 0; i < length; i++)
+                compoundArray[i] = {{property.Name}}[i].ToCompound();
+            compound["{{key}}"] = new NbtList("{{key}}", TagType.Compound, compoundArray);
+        """);
+                        break;
+                    case "NbtComponent":
+                        EmitChecked($"compound[\"{key}\"] = {property.Name}.ToCompound();");
+                        break;
+                    default:
+                        sb.AppendLine($"   throw new Exception(\"Unsupported Type\");         // Unsupported type: {componentType}");
                         break;
                 }
             }
+            sb.AppendLine($"            return compound;");
+            //Debugger.Launch();
             return sb.ToString();
         }
     }
