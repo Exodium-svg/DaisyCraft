@@ -17,7 +17,7 @@ namespace Nbt.Components.Registry
         [NbtComponentType("description", ComponentType.NbtComponent)]
         public TextComponent Description { get; set; }
         [JsonPropertyName("decal")]
-        [NbtComponentType("decal", ComponentType.Byte)]
-        public byte Decal { get; set; }
+        [NbtComponentType("decal", ComponentType.Bool)]
+        public bool Decal { get; set; }
     }
 }

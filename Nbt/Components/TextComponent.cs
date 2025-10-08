@@ -1,14 +1,16 @@
-﻿using System.Drawing;
+﻿using Nbt.Serialization.JsonConverters;
+using System.Drawing;
 using System.Text.Json.Serialization;
 
 namespace Nbt.Components
 {
     public partial struct TextComponent : INbtComponent
     {
-
+        [JsonConverter(typeof(ColorJsonConverter))]
         [JsonPropertyName("color")]
-        [NbtComponentTypeAttribute("color" ,ComponentType.HexColor)]
+        [NbtComponentTypeAttribute("color", ComponentType.HexColor)]
         public Color? TextColor { get; set; }
+        [JsonConverter(typeof(ColorJsonConverter))]
         [JsonPropertyName("shadow_color")]
         [NbtComponentTypeAttribute("shadow_color", ComponentType.IntColor)]
         public Color? ShadowColor { get; set; }

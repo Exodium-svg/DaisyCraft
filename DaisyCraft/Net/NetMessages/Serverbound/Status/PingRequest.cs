@@ -15,7 +15,7 @@ namespace Net.NetMessages.Serverbound.Status
         {
             await player.SendAsync(new PingResponse { Time = Time });
 
-            server.GetService<Scheduler>().ScheduleDelayed(3, () =>
+            server.GetService<Scheduler>().ScheduleDelayed(1000, () =>
             {
                 player.Connection.Close();
                 return 0;

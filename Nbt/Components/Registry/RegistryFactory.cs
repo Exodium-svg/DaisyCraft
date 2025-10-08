@@ -17,9 +17,9 @@ namespace Nbt.Registries
                     return JsonSerializer.Deserialize<ChatTypeRegistry>(json);
                 case "painting_variant":
                     return JsonSerializer.Deserialize<PaintingVariantRegistry>(json);
-                case "armor_trim_material":
+                case "trim_material":
                     return JsonSerializer.Deserialize<ArmorTrimMaterialRegistry>(json);
-                case "armor_trim_pattern":
+                case "trim_pattern":
                     return JsonSerializer.Deserialize<ArmorTrimPatternRegistry>(json);
                 case "worldgen/biome":
                     return JsonSerializer.Deserialize<BiomeRegistry>(json);
