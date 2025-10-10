@@ -132,9 +132,7 @@ namespace Game.Registry
                 JsonValueKind.Object => ConvertJsonToNbtCompound(jsonVal, key),
                 JsonValueKind.Array => BuildNbtListFromJson(jsonVal, key),
                 JsonValueKind.String => new NbtString(key, jsonVal.GetString() ?? string.Empty),
-                JsonValueKind.Number =>
-                    jsonVal.TryGetInt32(out var i) ? new NbtInt(key, i)
-                    : new NbtDouble(key, jsonVal.GetDouble()),
+                JsonValueKind.Number => jsonVal.TryGetInt32(out var i) ? new NbtInt(key, i) : new NbtDouble(key, jsonVal.GetDouble()),
                 JsonValueKind.True => new NbtByte(key, 1),
                 JsonValueKind.False => new NbtByte(key, 0),
                 _ => new NbtString(key, jsonVal.ToString())

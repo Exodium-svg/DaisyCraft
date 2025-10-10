@@ -49,7 +49,7 @@ namespace Utils
 
                 settingCount++;
             }
-            logger.Info($"Loaded {settingCount} settings");
+            //logger.Info($"Loaded {settingCount} settings");
         }
 
 

@@ -1,4 +1,5 @@
-﻿using Nbt.Components;
+﻿using DaisyCraft.Game.Registry;
+using Nbt.Components;
 using NetMessages.Serverbound;
 using System.Reflection;
 using System.Text;
@@ -77,11 +78,12 @@ namespace Net.NetMessages
                         break;
                     case NetVarTypeEnum.Identifier:
                         Identifier identifier = (Identifier)value!;
-                        byte[] tagBytes = Encoding.UTF8.GetBytes(identifier.Tag);
-                        Leb128.WriteVarInt(ms, tagBytes.Length);
-                        ms.Write(tagBytes);
-                        Leb128.WriteVarInt(ms, identifier.Value.Length);
-                        ms.Write(identifier.Value);
+                        //byte[] tagBytes = Encoding.UTF8.GetBytes(identifier.Tag);
+                        //Leb128.WriteVarInt(ms, tagBytes.Length);
+                        //ms.Write(tagBytes);
+                        //Leb128.WriteVarInt(ms, identifier.Value.Length);
+                        //ms.Write(identifier.Value);
+                        ms.WriteString($"{identifier.Name}:{identifier.Namespace}");
                         break;
                     case NetVarTypeEnum.NbtComponent:
                         INbtComponent component = (INbtComponent)value!;
@@ -90,6 +92,9 @@ namespace Net.NetMessages
                             component.Write(writer);
                         }
                         //File.WriteAllBytes("TextComponentNbt.bin", ms.ToArray());
+                        break;
+                    case NetVarTypeEnum.PrefixedArray:
+                        throw new NotImplementedException("Rework this poop system already...");
                         break;
                     default:
                         throw new NotImplementedException($"Serialization for {tag.VarType} is not implemented.");
@@ -165,12 +170,16 @@ namespace Net.NetMessages
                     case NetVarTypeEnum.Identifier:
                         //int tagLen = Leb128.ReadVarInt(stream);
                         string identifierTag = stream.ReadString();
-                        int identifierLength = Leb128.ReadVarInt(stream);
-                        byte[] identifierData = new byte[identifierLength];
-                        stream.ReadExactly(identifierData);
-
-                        prop.SetValue(netMsg, new Identifier(identifierTag, identifierData));
-
+                        //int identifierLength = Leb128.ReadVarInt(stream);
+                        //byte[] identifierData = new byte[identifierLength];
+                        //stream.ReadExactly(identifierData);
+                        string[] identifierParts = identifierTag.Split(new char[] { ':' }, 2);
+                        prop.SetValue(netMsg, new Identifier {Name = identifierParts[0], Namespace = identifierParts[1] });
+                        break;
+                    case NetVarTypeEnum.RemainderBytes:
+                        byte[] buffer = new byte[stream.Length - stream.Position];
+                        stream.ReadExactly(buffer);
+                        prop.SetValue(netMsg, buffer);
                         break;
                     default:
                         throw new NotImplementedException($"Deserialization for {fieldTag.VarType} is not implemented.");

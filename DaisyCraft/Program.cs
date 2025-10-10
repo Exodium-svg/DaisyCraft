@@ -14,13 +14,14 @@ internal class Program
     static void Main(string[] args)
     {
         Logger logger = new Logger(new Stream[] { Console.OpenStandardOutput() });
+        RegistryCodec registry;
 
-        CodecLoader loader = new("Registry");
-
-        loader.Load(logger).Wait();
-
-        RegistryCodec registry = loader.CreateCodec();
-        loader = null; // Tell the GC to free it.
+        {
+            CodecLoader loader = new("Registry"); // Make sure it exists within it's own scope so it can be collected when done.
+            logger.Info("Loading registries...");
+            loader.Load(logger).Wait();
+            registry = loader.CreateCodec();
+        }
 
         Settings settings = new Settings();
         settings.StartAsync("Resource/settings.txt", logger).Wait();
@@ -29,13 +30,8 @@ internal class Program
 
         const string ICON_PATH = "Resource/server-icon.png";
         if ( File.Exists(ICON_PATH) )
-        {
-            byte[] pngData = File.ReadAllBytes(ICON_PATH);
+            server.Status.Icon += Convert.ToBase64String(File.ReadAllBytes(ICON_PATH));
 
-            server.Status.Icon += Convert.ToBase64String(pngData);
-
-            logger.Info("Favicon loaded.");
-        }
 
         IEnumerable<string>? bannedIps = null;
         const string BANNED_IPS_PATH = "Resource/banned-ips.txt";
@@ -54,9 +50,6 @@ internal class Program
                 Assembly.GetExecutingAssembly(), bannedIps)
             );
 
-
-
-        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, true, true); // clean up here, as we can pause once for free.
 
         const int MILLISECOND = 1000;
 

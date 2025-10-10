@@ -16,7 +16,9 @@ namespace Game.Registry
         
         public Registry<T> Get<T>(string tag) where T : INbtComponent
         {
-            if(RegistryEntries.TryGetValue(tag, out var registryEntry))
+            Identifier id = new Identifier { Name = tag, Namespace = "minecraft" };
+            string registryId = id.ToString();
+            if (RegistryEntries.TryGetValue(registryId, out var registryEntry))
                 return ((Registry<T>)registryEntry);
 
             T? value = Activator.CreateInstance<T>();
@@ -24,16 +26,25 @@ namespace Game.Registry
             if (null == value)
                 throw new Exception($"Invalid value, no default constructor found for: {typeof(T).Name}");
 
-            if (!Entries.TryGetValue(tag, out var registry))
+            if (!Entries.TryGetValue($"minecraft:{tag}", out var registry))
                 throw new KeyNotFoundException($"No registry found for tag '{tag}'");
 
             NbtCompound compoundTag = registry.Root;
             value.Read(ref compoundTag);
 
-            Registry<T> newRegistry = new Registry<T>(registry.Name, registry.Namespace, value);
-            RegistryEntries[$"{registry.Namespace}:{registry.Name}"] = newRegistry;
+            Registry<T> newRegistry = new Registry<T>(id, value);
+            RegistryEntries[registryId] = newRegistry;
 
             return newRegistry;
+        }
+
+        public List<NbtCompound> GetAll(string nameSpace) => Entries.Values.Where((RegistryObject registry) => registry.Identifier.Namespace == nameSpace).Select( (register) => register.Root ).ToList();
+        public RegistryObject Get(string tag)
+        {
+            if (!Entries.TryGetValue($"minecraft:{tag}", out var registry))
+                throw new KeyNotFoundException($"No registry found for tag '{tag}'");
+
+            return registry;
         }
     }
 }

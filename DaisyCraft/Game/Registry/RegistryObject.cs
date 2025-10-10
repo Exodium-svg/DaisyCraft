@@ -3,15 +3,19 @@ using System.Text.Json;
 
 namespace DaisyCraft.Game.Registry
 {
-    public class RegistryObject
+    public class RegistryObject : IRegistry
     {
-        public string Name { get; init; }
-        public string Namespace { get; init; }
         public NbtCompound Root { get; set; }
-        public RegistryObject(string name, string ns, NbtCompound root)
+        public Identifier Identifier { get; init; }
+
+        public RegistryObject(string name, string nameSpace, NbtCompound root)
         {
-            Name = name;
-            Namespace = ns;
+            Identifier = new Identifier { Name = name, Namespace = nameSpace };
+            Root = root;
+        }
+        public RegistryObject(Identifier id, NbtCompound root)
+        {
+            Identifier = id;
             Root = root;
         }
     }

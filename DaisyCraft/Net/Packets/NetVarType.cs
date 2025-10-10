@@ -13,6 +13,8 @@
         ByteArray,
         Identifier,
         NbtComponent,
+        RemainderBytes,
+        PrefixedArray
     }
     public class NetVarType : Attribute
     {
