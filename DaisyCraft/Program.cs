@@ -1,6 +1,6 @@
 ﻿using DaisyCraft;
 using DaisyCraft.Utils;
-using Game.Registery;
+using Game.Registry;
 using Net;
 using Scheduling;
 using System.Buffers.Text;
@@ -19,11 +19,13 @@ internal class Program
 
         loader.Load(logger).Wait();
 
+        RegistryCodec registry = loader.CreateCodec();
+        loader = null; // Tell the GC to free it.
 
         Settings settings = new Settings();
         settings.StartAsync("Resource/settings.txt", logger).Wait();
 
-        Server server = new Server(logger, settings);
+        Server server = new Server(logger, settings, registry);
 
         const string ICON_PATH = "Resource/server-icon.png";
         if ( File.Exists(ICON_PATH) )
@@ -52,6 +54,9 @@ internal class Program
                 Assembly.GetExecutingAssembly(), bannedIps)
             );
 
+
+
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, true, true); // clean up here, as we can pause once for free.
 
         const int MILLISECOND = 1000;
 

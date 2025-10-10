@@ -4,6 +4,8 @@ using Net;
 using System.Collections.Concurrent;
 using Utils;
 using Services;
+using Game.Registry;
+using Microsoft.Win32;
 
 namespace DaisyCraft
 {
@@ -22,12 +24,13 @@ namespace DaisyCraft
         public Logger Logger { get; init; }
         public Settings Options { get; init; }
         public SessionService SessionService { get; init; }
-        public Server(Logger logger, Settings options)
+        public RegistryCodec Registry { get; init; }
+        public Server(Logger logger, Settings options, RegistryCodec registry)
         {
             Options = options;
             Logger = logger;
             SessionService = new("user-cache");
-
+            Registry = registry;
             Status.Description = options.GetVar("motd.status", "DaisyCraft server");
         }
         

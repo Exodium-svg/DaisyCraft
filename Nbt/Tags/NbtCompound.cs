@@ -13,6 +13,12 @@
             tags = new List<INbtTag>();
         }
 
+        public NbtCompound()
+        {
+            Key = string.Empty;
+            tags = new();
+        }
+
         public bool ContainsKey(string key)
         {
             foreach (var tag in tags)
